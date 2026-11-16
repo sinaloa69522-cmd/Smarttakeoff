@@ -6,6 +6,7 @@
 <title>SmartTakeoff</title>
 <script src="lib/pdf.min.js"></script>
 <script src="lib/xlsx.full.min.js"></script>
+<script src="lib/pdf-lib.min.js"></script>
 <style>
 :root{
   --bg:#f4f5f7; --panel:#ffffff; --ink:#1d2330; --muted:#677084; --line:#dde1e8;
@@ -65,6 +66,9 @@ aside h3{margin:0;padding:10px 10px 6px;font-size:11px;text-transform:uppercase;
 #pageList .sheet.missing{opacity:.55;border-style:dashed}
 main{display:grid;grid-template-rows:1fr 6px var(--bottomH,260px);grid-template-columns:minmax(0,1fr);min-height:0;min-width:0}
 #viewer{position:relative;overflow:auto;background:var(--viewer);min-height:0}
+#cmpBar{position:sticky;top:0;left:0;z-index:5;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+#cmpBar .lg{display:flex;align-items:center;gap:4px;color:var(--muted)}
+#cmpBar .lg i{width:12px;height:12px;border-radius:2px;display:inline-block}
 #stage{position:relative;margin:24px;display:inline-block;box-shadow:0 2px 12px rgba(0,0,0,.25);background:#fff}
 #pdfCanvas{display:block}
 #overlay{position:absolute;left:0;top:0;user-select:none}
@@ -126,6 +130,10 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
       <input id="filePdf" type="file" accept="application/pdf,.pdf" hidden>
       <button id="btnSave" title="Guardar proyecto (.json)">Guardar</button>
       <button id="btnLoad" title="Abrir proyecto (.json)">Abrir proyecto</button>
+      <button id="btnPdfOut" title="Descargar los planos con todas las marcas y una leyenda">PDF con marcas</button>
+      <button id="btnCompare" title="Comparar esta hoja con otra revisión del plano">Comparar revisión</button>
+      <input id="fileCmp" type="file" accept="application/pdf,.pdf" hidden>
+      <input id="filePhoto" type="file" accept="image/*" hidden>
       <input id="fileJson" type="file" accept=".json,application/json" hidden>
     </div>
     <div class="grp" id="tools">
@@ -134,9 +142,8 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
       <button class="tool" data-tool="linear" title="Medición lineal (L)">Lineal<kbd>L</kbd></button>
       <button class="tool" data-tool="area" title="Medición de área (A)">Área<kbd>A</kbd></button>
       <button class="tool" data-tool="count" title="Conteo (C)">Conteo<kbd>C</kbd></button>
-      <button class="tool" data-tool="cloud" title="Nube de revisión (R)">Nube<kbd>R</kbd></button>
       <button class="tool" data-tool="deduct" title="Deducir un hueco de un área (D)">Deducir<kbd>D</kbd></button>
-      <button class="tool" data-tool="text" title="Nota de texto (T)">Texto<kbd>T</kbd></button>
+      <select id="annoSel" title="Anotaciones de revisión"><option value="">Anotar…</option><option value="cloud">Nube (R)</option><option value="text">Texto (T)</option><option value="arrow">Flecha (W)</option><option value="callout">Callout (Q)</option><option value="highlight">Resaltar (H)</option><option value="stamp">Sello (M)</option><option value="photo">Foto (F)</option></select>
       <button id="btnSnap" class="on" title="Ajustar a líneas del plano y a puntos de otras mediciones (S)">Snap<kbd>S</kbd></button>
     </div>
     <div class="grp">
@@ -177,6 +184,7 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
 
   <main>
     <div id="viewer">
+      <div id="cmpBar" hidden><span id="cmpTxt"></span><span class="lg"><i style="background:#e03131"></i>Solo en la versión actual</span><span class="lg"><i style="background:#1c7ed6"></i>Nuevo en la revisión</span><button id="cmpUse" class="primary">Usar la revisión en esta hoja</button><button id="cmpExit">Salir</button></div>
       <div id="stage" hidden>
         <canvas id="pdfCanvas"></canvas>
         <svg id="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -232,7 +240,7 @@ if (location.protocol === 'file:') {
 /* ---------- State ---------- */
 const $ = s => document.querySelector(s);
 const S = {
-  pdf: null, pdfs: {}, sheets: [], fileName: '', pageNum: 1, numPages: 0, snap: true, snapHit: null, zoom: 1, pageW: 0, pageH: 0,
+  pdf: null, pdfs: {}, pdfBytes: {}, sheets: [], compare: null, fileName: '', pageNum: 1, numPages: 0, snap: true, snapHit: null, zoom: 1, pageW: 0, pageH: 0,
   tool: 'select', units: 'imperial',
   pages: {},        // page -> {cal: base units per PDF point, calLabel}
   items: [],        // measurements + annotations
@@ -481,11 +489,12 @@ async function openPdf(file, append) {
   try {
     await workerReady;
     const buf = await file.arrayBuffer();
+    const bytes = buf.slice(0);
     const pdf = await pdfjs.getDocument({ data: buf }).promise;
     let restored = false;
     if (!append) {
       const sameProject = S.fileName === file.name && S.items.length;
-      S.fileName = file.name; S.pdfs = {};
+      S.fileName = file.name; S.pdfs = {}; S.pdfBytes = {};
       if (!sameProject) {
         S.items = []; S.pages = {}; S.undo = []; S.redo = []; S.sheets = [];
         try { const saved = localStorage.getItem('smarttakeoff:' + file.name); if (saved) { loadProjectData(JSON.parse(saved)); restored = true; } } catch (e) { }
@@ -493,7 +502,7 @@ async function openPdf(file, append) {
       }
     }
     if (!S.sheets.some(sh => sh.doc === file.name)) S.sheets.push(...buildSheets(file.name, pdf.numPages));
-    S.pdfs[file.name] = pdf; S.pdf = pdf; S.numPages = S.sheets.length;
+    S.pdfs[file.name] = pdf; S.pdfBytes[file.name] = bytes; S.pdf = pdf; S.numPages = S.sheets.length;
     // name sheets from their title blocks (only ones the user has not renamed)
     for (const sh of S.sheets.filter(x => x.doc === file.name && x.auto)) { const nm = await detectSheetName(pdf, sh.page); if (nm) sh.name = nm; }
     $('#empty').hidden = true; $('#stage').hidden = false;
@@ -527,6 +536,7 @@ function fitZoom() {
   render();
 }
 async function render() {
+  if (S.compare) endCompare();
   if (!curPage) return;
   const dpr = window.devicePixelRatio || 1;
   const cv = $('#pdfCanvas');
@@ -613,11 +623,30 @@ function drawOverlay() {
       h += '</g>';
     } else if (it.type === 'cloud') {
       h += `<g data-id="${it.id}"><path d="${cloudPath(it.points[0], it.points[1])}" fill="#e03131" fill-opacity=".04" stroke="#e03131" stroke-width="${sw}" ${dash} vector-effect="non-scaling-stroke"/></g>`;
+    } else if (it.type === 'arrow') {
+      const [a, b] = it.points, ang = Math.atan2(b[1] - a[1], b[0] - a[0]), L = 12 / z;
+      const h1 = [b[0] - L * Math.cos(ang - 0.4), b[1] - L * Math.sin(ang - 0.4)], h2 = [b[0] - L * Math.cos(ang + 0.4), b[1] - L * Math.sin(ang + 0.4)];
+      h += `<g data-id="${it.id}"><line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="transparent" stroke-width="14" vector-effect="non-scaling-stroke"/><line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#e03131" stroke-width="${sw}" ${dash} vector-effect="non-scaling-stroke"/><polygon points="${b.join(',')} ${h1.join(',')} ${h2.join(',')}" fill="#e03131"/></g>`;
+    } else if (it.type === 'callout') {
+      const [a, b] = it.points, f2 = fs * 1.1, tw = (it.text || '').length * f2 * 0.56 + f2, th = f2 * 1.7;
+      const bx = b[0] >= a[0] ? b[0] : b[0] - tw, by = b[1] - th / 2;
+      h += `<g data-id="${it.id}"><line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#e03131" stroke-width="2" vector-effect="non-scaling-stroke"/><circle cx="${a[0]}" cy="${a[1]}" r="${r * .45}" fill="#e03131"/>
+        <rect x="${bx}" y="${by}" width="${tw}" height="${th}" fill="#fff" stroke="#e03131" stroke-width="${sel ? 3 : 1.5}" vector-effect="non-scaling-stroke" rx="${2 / z}"/><text x="${bx + f2 / 2}" y="${by + th * 0.68}" font-size="${f2}" fill="#e03131" style="stroke:none">${esc(it.text)}</text></g>`;
+    } else if (it.type === 'highlight') {
+      const [a, b] = it.points;
+      h += `<g data-id="${it.id}"><rect x="${Math.min(a[0], b[0])}" y="${Math.min(a[1], b[1])}" width="${Math.abs(b[0] - a[0])}" height="${Math.abs(b[1] - a[1])}" fill="#fab005" fill-opacity=".35" stroke="${sel ? '#e67700' : 'none'}" stroke-width="2" vector-effect="non-scaling-stroke"/></g>`;
+    } else if (it.type === 'stamp') {
+      const [lbl, scol] = STAMPS[it.stamp] || STAMPS.reviewed, p = it.points[0], f2 = fs * 1.5, tw = lbl.length * f2 * 0.68 + f2, th = f2 * 2.6;
+      h += `<g data-id="${it.id}" transform="rotate(-8 ${p[0]} ${p[1]})"><rect x="${p[0] - tw / 2}" y="${p[1] - th / 2}" width="${tw}" height="${th}" fill="#fff" fill-opacity=".6" stroke="${scol}" stroke-width="${sel ? 4 : 2.5}" rx="${4 / z}" vector-effect="non-scaling-stroke"/>
+        <text x="${p[0]}" y="${p[1] - f2 * 0.05}" font-size="${f2}" font-weight="800" fill="${scol}" text-anchor="middle" style="stroke:none;letter-spacing:.06em">${esc(lbl)}</text><text x="${p[0]}" y="${p[1] + f2 * 0.85}" font-size="${f2 * 0.55}" fill="${scol}" text-anchor="middle" style="stroke:none">${esc(it.date || '')}</text></g>`;
+    } else if (it.type === 'photo') {
+      const p = it.points[0], q = 9 / z;
+      h += `<g data-id="${it.id}" style="cursor:pointer"><rect x="${p[0] - q}" y="${p[1] - q * .75}" width="${q * 2}" height="${q * 1.5}" rx="${q * .25}" fill="#1971c2" stroke="#fff" stroke-width="1.5" vector-effect="non-scaling-stroke"/><circle cx="${p[0]}" cy="${p[1]}" r="${q * .45}" fill="none" stroke="#fff" stroke-width="1.5" vector-effect="non-scaling-stroke"/></g>`;
     } else if (it.type === 'text') {
       const p = it.points[0];
       h += `<g data-id="${it.id}"><text x="${p[0]}" y="${p[1]}" font-size="${fs * 1.3}" fill="#e03131" font-weight="600" ${sel ? 'text-decoration="underline"' : ''}>${esc(it.text)}</text></g>`;
     }
-    if (sel && (it.type === 'linear' || it.type === 'area' || it.type === 'cloud')) {
+    if (sel && it.type !== 'count') {
       it.points.forEach((p, i) => h += `<rect data-handle="${i}" data-hid="${it.id}" x="${p[0] - r * .7}" y="${p[1] - r * .7}" width="${r * 1.4}" height="${r * 1.4}" fill="#fff" stroke="#000" stroke-width="1.5" vector-effect="non-scaling-stroke" style="cursor:move"/>`);
     }
   }
@@ -626,9 +655,10 @@ function drawOverlay() {
   if (d && S.cursor) {
     const pts = [...d.points, S.cursor];
     const c = condById(d.cond);
-    const col = d.type === 'calibrate' || d.type === 'cloud' || d.type === 'deduct' ? '#e03131' : (c ? c.color : '#e03131');
+    const col = !['linear', 'area'].includes(d.type) ? '#e03131' : (c ? c.color : '#e03131');
     const P = pts.map(p => p.join(',')).join(' ');
     if (d.type === 'area' || d.type === 'deduct') h += `<polygon points="${P}" fill="${col}" fill-opacity=".15" stroke="${col}" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
+    else if (d.type === 'highlight') { const [a, b] = pts; h += `<rect x="${Math.min(a[0], b[0])}" y="${Math.min(a[1], b[1])}" width="${Math.abs(b[0] - a[0])}" height="${Math.abs(b[1] - a[1])}" fill="#fab005" fill-opacity=".25" stroke="#e67700" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`; }
     else if (d.type === 'cloud') h += `<path d="${cloudPath(pts[0], pts[1])}" fill="none" stroke="${col}" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
     else h += `<polyline points="${P}" fill="none" stroke="${col}" stroke-width="2.5" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
     pts.forEach(p => h += `<circle cx="${p[0]}" cy="${p[1]}" r="${r * .5}" fill="${col}"/>`);
@@ -651,8 +681,16 @@ const hints = {
   deduct: 'Dibuja el hueco dentro de un área: clic en cada vértice, doble clic o Enter para restarlo',
   count: 'Clic en cada elemento para contarlo · Enter o Esc para terminar el grupo',
   cloud: 'Clic en dos esquinas opuestas',
-  text: 'Clic donde quieres la nota'
+  text: 'Clic donde quieres la nota',
+  arrow: 'Clic en el inicio y luego en la punta de la flecha',
+  callout: 'Clic en el punto a señalar y luego donde va el texto',
+  highlight: 'Clic en dos esquinas opuestas del área a resaltar',
+  stamp: 'Clic donde va el sello',
+  photo: 'Clic donde va la foto y elige la imagen'
 };
+const TOOL_LABEL = { select: 'Seleccionar', calibrate: 'Calibrar', linear: 'Lineal', area: 'Área', count: 'Conteo', deduct: 'Deducir', cloud: 'Nube', text: 'Texto', arrow: 'Flecha', callout: 'Callout', highlight: 'Resaltar', stamp: 'Sello', photo: 'Foto' };
+const ANNO_TOOLS = ['cloud', 'text', 'arrow', 'callout', 'highlight', 'stamp', 'photo'];
+const STAMPS = { approved: ['APPROVED', '#2b8a3e'], reviewed: ['REVIEWED', '#1971c2'], revise: ['REVISE & RESUBMIT', '#e8590c'], rejected: ['REJECTED', '#c92a2a'], field: ['FIELD VERIFY', '#5f3dc4'], nic: ['NOT IN CONTRACT', '#495057'] };
 function setTool(t) {
   finishDraft(); S.openCount = null;
   if (['linear', 'area', 'count'].includes(t)) {
@@ -666,18 +704,20 @@ function setTool(t) {
   S.tool = t;
   document.querySelectorAll('.tool').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
   $('#overlay').style.cursor = t === 'select' ? 'grab' : 'crosshair';
-  $('#stTool').innerHTML = 'Herramienta: <b>' + esc($(`.tool[data-tool="${t}"]`).firstChild.textContent) + '</b>' + (['linear', 'area', 'count'].includes(t) ? ' · ' + esc(condById(S.activeCond).name) : '');
+  $('#annoSel').value = ANNO_TOOLS.includes(t) ? t : '';
+  $('#stTool').innerHTML = 'Herramienta: <b>' + esc(TOOL_LABEL[t] || t) + '</b>' + (['linear', 'area', 'count'].includes(t) ? ' · ' + esc(condById(S.activeCond).name) : '');
   $('#stHint').textContent = hints[t] || '';
   renderConditions();
   drawOverlay();
 }
 document.querySelectorAll('.tool').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+$('#annoSel').addEventListener('change', e => { if (!S.pdf) { e.target.value = ''; return; } setTool(e.target.value || 'select'); e.target.blur(); });
 
 function evtPt(e) {
   const r = $('#overlay').getBoundingClientRect();
   return [(e.clientX - r.left) / S.zoom, (e.clientY - r.top) / S.zoom];
 }
-const SNAP_TOOLS = ['calibrate', 'linear', 'area', 'deduct', 'cloud'];
+const SNAP_TOOLS = ['calibrate', 'linear', 'area', 'deduct', 'cloud', 'arrow', 'callout', 'highlight'];
 function toggleSnap() { S.snap = !S.snap; $('#btnSnap').classList.toggle('on', S.snap); toast(S.snap ? 'Snap activado' : 'Snap desactivado'); }
 // Snap to vertices of existing takeoffs first, then to the nearest dark line on the rendered drawing
 function snapPt(p) {
@@ -775,11 +815,13 @@ ov.addEventListener('click', e => {
   if (e.detail >= 2) { if (t === 'linear' || t === 'area' || t === 'deduct') finishDraft(); return; }
   if (t === 'count') { addCount(p); return; }
   if (t === 'text') { addText(p); return; }
+  if (t === 'stamp') { addStamp(p); return; }
+  if (t === 'photo') { S.photoAt = p; $('#filePhoto').click(); return; }
   if (!S.draft) S.draft = { type: t, cond: S.activeCond, points: [] };
   const d = S.draft;
   if (d.points.length && e.shiftKey && t !== 'cloud') p = ortho(p, d.points[d.points.length - 1]);
   d.points.push(p);
-  if ((t === 'calibrate' || t === 'cloud') && d.points.length === 2) finishDraft();
+  if (['calibrate', 'cloud', 'arrow', 'highlight', 'callout'].includes(t) && d.points.length === 2) finishDraft();
   drawOverlay();
 });
 ov.addEventListener('mouseleave', () => { S.cursor = null; drawOverlay(); });
@@ -821,7 +863,12 @@ function finishDraft() {
   }
   pushUndo();
   const it = { id: newId('m'), page: S.pageNum, type: d.type, points: d.points };
-  if (d.type !== 'cloud') it.cond = d.cond;
+  if (d.type === 'linear' || d.type === 'area') it.cond = d.cond;
+  if (d.type === 'callout') {
+    modal(`<h3>Callout</h3><div class="form"><label>Texto</label><input type="text" id="mText" autofocus></div>`, [{ t: 'Cancelar', f: () => drawOverlay() },
+      { t: 'Agregar', primary: true, f: () => { const v = $('#mText').value.trim(); if (!v) return false; it.text = v; pushUndo(); S.items.push(it); refresh(); } }]);
+    return;
+  }
   S.items.push(it);
   if (isMeasure(it) && !cal(S.pageNum)) toast('Medición guardada. Calibra la escala para ver la cantidad real.');
   refresh();
@@ -836,6 +883,30 @@ function addCount(p) {
   it.points.push(p);
   refresh();
 }
+function addStamp(p) {
+  modal(`<h3>Sello</h3><div class="form"><label>Tipo</label><select id="mStamp">${Object.entries(STAMPS).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join('')}</select></div>`, [
+    { t: 'Cancelar' },
+    { t: 'Agregar', primary: true, f: () => { pushUndo(); S.items.push({ id: newId('m'), page: S.pageNum, type: 'stamp', points: [p], stamp: $('#mStamp').value, date: new Date().toLocaleDateString('en-US') }); refresh(); } }
+  ]);
+}
+$('#filePhoto').addEventListener('change', e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f || !S.photoAt) return;
+  const img = new Image(); const url = URL.createObjectURL(f);
+  img.onload = () => {
+    const k = Math.min(1, 1280 / Math.max(img.width, img.height)); const c = document.createElement('canvas');
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    pushUndo(); S.items.push({ id: newId('m'), page: S.pageNum, type: 'photo', points: [S.photoAt], img: c.toDataURL('image/jpeg', 0.82), name: f.name });
+    URL.revokeObjectURL(url); refresh(); toast('Foto agregada. Doble clic en el ícono para verla.');
+  };
+  img.onerror = () => toast('No se pudo leer la imagen');
+  img.src = url;
+});
+ov.addEventListener('dblclick', e => {
+  const g = e.target.closest('[data-id]'); if (!g) return;
+  const it = S.items.find(x => x.id === g.dataset.id); if (!it) return;
+  if (it.type === 'photo') modal(`<h3>${esc(it.name || 'Foto')}</h3><img src="${it.img}" style="max-width:100%;border-radius:6px">`, [{ t: 'Cerrar', primary: true }]);
+  if ((it.type === 'text' || it.type === 'callout') && S.tool === 'select') modal(`<h3>${it.type === 'callout' ? 'Callout' : 'Nota de texto'}</h3><div class="form"><label>Texto</label><input type="text" id="mText" value="${esc(it.text)}" autofocus></div>`, [{ t: 'Cancelar' }, { t: 'Guardar', primary: true, f: () => { const v = $('#mText').value.trim(); if (v) { pushUndo(); it.text = v; refresh(); } } }]);
+});
 function addText(p) {
   modal(`<h3>Nota de texto</h3><div class="form"><label>Texto</label><input type="text" id="mText" autofocus></div>`, [
     { t: 'Cancelar' },
@@ -894,7 +965,7 @@ window.addEventListener('keydown', e => {
   if (e.key === '+' || e.key === '=') { setZoom(S.zoom * 1.25); return; }
   if (e.key === '-') { setZoom(S.zoom / 1.25); return; }
   if (k === 's' && S.pdf) { toggleSnap(); return; }
-  const map = { v: 'select', k: 'calibrate', l: 'linear', a: 'area', c: 'count', r: 'cloud', t: 'text', d: 'deduct' };
+  const map = { v: 'select', k: 'calibrate', l: 'linear', a: 'area', c: 'count', r: 'cloud', t: 'text', d: 'deduct', w: 'arrow', q: 'callout', h: 'highlight', m: 'stamp', f: 'photo' };
   if (map[k] && S.pdf) setTool(map[k]);
 });
 window.addEventListener('keyup', e => { if (e.key === ' ') { spaceDown = false; ov.style.cursor = S.tool === 'select' ? 'grab' : 'crosshair'; } });
@@ -1448,6 +1519,113 @@ $('#split').addEventListener('mousedown', e => { splitDrag = { y: e.clientY, h: 
 window.addEventListener('mousemove', e => { if (!splitDrag) return; const h = Math.max(120, Math.min(window.innerHeight - 200, splitDrag.h - (e.clientY - splitDrag.y))); document.querySelector('main').style.setProperty('--bottomH', h + 'px'); });
 window.addEventListener('mouseup', () => { splitDrag = null; });
 $('#opacity').addEventListener('input', e => { $('#overlay').style.opacity = e.target.value / 100; });
+/* ---------- Compare revisions ---------- */
+$('#btnCompare').addEventListener('click', () => { if (!curPage) { toast('Abre un plano primero'); return; } $('#fileCmp').click(); });
+$('#fileCmp').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) compareRevision(f); });
+async function compareRevision(file) {
+  try {
+    const sh = S.sheets[S.pageNum - 1];
+    const buf = await file.arrayBuffer(); const bytes = buf.slice(0);
+    const pdf = await pdfjs.getDocument({ data: buf }).promise;
+    // match the sheet by its number in the title block, else by page position
+    let pg = 0;
+    for (let i = 1; i <= pdf.numPages && !pg; i++) { const nm = await detectSheetName(pdf, i); if (nm && sh && nm === sh.name) pg = i; }
+    if (!pg) pg = sh && sh.page <= pdf.numPages ? sh.page : 1;
+    const np = await pdf.getPage(pg);
+    const cv = $('#pdfCanvas'), W = cv.width, H = cv.height, ctx = cv.getContext('2d');
+    const oldImg = ctx.getImageData(0, 0, W, H);
+    const off = document.createElement('canvas'); off.width = W; off.height = H;
+    const oc = off.getContext('2d'); oc.fillStyle = '#fff'; oc.fillRect(0, 0, W, H);
+    await np.render({ canvasContext: oc, viewport: np.getViewport({ scale: W / np.getViewport({ scale: 1 }).width }) }).promise;
+    const a = oldImg.data, b = oc.getImageData(0, 0, W, H).data, out = ctx.createImageData(W, H), o = out.data;
+    const dk = (d, i) => d[i + 3] > 0 && d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11 < 170;
+    let gone = 0, added = 0;
+    for (let i = 0; i < a.length; i += 4) {
+      const x = dk(a, i), y = dk(b, i);
+      const c = x && y ? [150, 150, 150] : x ? (gone++, [224, 49, 49]) : y ? (added++, [28, 126, 214]) : [255, 255, 255];
+      o[i] = c[0]; o[i + 1] = c[1]; o[i + 2] = c[2]; o[i + 3] = 255;
+    }
+    ctx.putImageData(out, 0, 0);
+    S.compare = { name: file.name, pdf, bytes, page: pg };
+    $('#cmpTxt').innerHTML = `${esc(sheetName(S.pageNum))} vs <b>${esc(file.name)}</b> p${pg}`;
+    $('#cmpBar').hidden = false;
+    toast(gone + added ? 'Cambios marcados en rojo y azul' : 'No encontré diferencias en esta hoja');
+  } catch (err) { console.error(err); toast('No se pudo comparar: ' + err.message); }
+}
+function endCompare() { S.compare = null; $('#cmpBar').hidden = true; }
+$('#cmpExit').addEventListener('click', () => { endCompare(); render(); });
+$('#cmpUse').addEventListener('click', async () => {
+  const c = S.compare, sh = S.sheets[S.pageNum - 1]; if (!c || !sh) return;
+  S.pdfs[c.name] = c.pdf; S.pdfBytes[c.name] = c.bytes;
+  sh.doc = c.name; sh.page = c.page; sh.rev = (sh.rev || 0) + 1;
+  endCompare(); await gotoPage(S.pageNum); toast('La hoja ahora usa la revisión. Tus mediciones se conservaron.');
+});
+
+/* ---------- Export the drawings with markups ---------- */
+const pdfSafe = t => String(t == null ? '' : t).replace(/[^\x20-\x7E\xA0-\xFF–—‘’“”•…]/g, '?');
+const hexRgb = hx => { const m = /^#?([0-9a-f]{6})$/i.exec(hx || '') || [0, 'e03131']; const n = parseInt(m[1], 16); return PDFLib.rgb((n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255); };
+function cloudPoly(a, b) {
+  const x1 = Math.min(a[0], b[0]), y1 = Math.min(a[1], b[1]), x2 = Math.max(a[0], b[0]), y2 = Math.max(a[1], b[1]);
+  const pts = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]], arc = Math.max(6, Math.min(x2 - x1, y2 - y1) / 6), out = [];
+  for (let i = 0; i < 4; i++) {
+    const p = pts[i], q = pts[(i + 1) % 4], L = dist(p, q), n = Math.max(1, Math.round(L / arc)), ux = (q[0] - p[0]) / L, uy = (q[1] - p[1]) / L;
+    for (let j = 0; j < n; j++) {
+      const sx = p[0] + (q[0] - p[0]) * j / n, sy = p[1] + (q[1] - p[1]) * j / n, rr = L / n / 2, cx = sx + ux * rr, cy = sy + uy * rr;
+      for (let k = 0; k <= 6; k++) { const t = Math.PI + Math.PI * k / 6; const vx = ux * Math.cos(t) - uy * Math.sin(t), vy = uy * Math.cos(t) + ux * Math.sin(t); out.push([cx + rr * vx, cy + rr * vy]); }
+    }
+  }
+  return out;
+}
+async function exportMarkedPdf() {
+  if (!S.pdf) { toast('Abre un plano primero'); return; }
+  if (!window.PDFLib) { toast('No se cargó la librería de PDF'); return; }
+  toast('Generando PDF…');
+  try {
+    const { PDFDocument, StandardFonts, rgb } = PDFLib;
+    const out = await PDFDocument.create(), font = await out.embedFont(StandardFonts.Helvetica), bold = await out.embedFont(StandardFonts.HelveticaBold);
+    const srcs = {}, red = rgb(0.88, 0.19, 0.19);
+    for (let n = 1; n <= S.sheets.length; n++) {
+      const sh = S.sheets[n - 1]; if (!S.pdfBytes[sh.doc]) continue;
+      const src = srcs[sh.doc] || (srcs[sh.doc] = await PDFDocument.load(S.pdfBytes[sh.doc], { ignoreEncryption: true }));
+      const [pg] = await out.copyPages(src, [sh.page - 1]); out.addPage(pg);
+      const vp = (await S.pdfs[sh.doc].getPage(sh.page)).getViewport({ scale: 1 });
+      const P = q => vp.convertToPdfPoint(q[0], q[1]);
+      const path = (pts, close) => pts.map((q, i) => { const [x, y] = P(q); return (i ? 'L' : 'M') + x + ',' + (-y); }).join(' ') + (close ? ' Z' : '');
+      const line = (a, b, color, w) => { const [x1, y1] = P(a), [x2, y2] = P(b); pg.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: w || 1.5, color }); };
+      const text = (t, q, size, color, f) => { const [x, y] = P(q); pg.drawText(pdfSafe(t), { x, y, size, font: f || font, color }); };
+      const legend = new Map();
+      for (const it of S.items.filter(x => x.page === n)) {
+        const c = condById(it.cond); const col = c ? hexRgb(c.color) : red;
+        if (c && isMeasure(it)) { const b = breakdown(it); const L = legend.get(c.id) || { c, q: 0, unit: b.unit, ok: b.ok }; L.q += b.q; legend.set(c.id, L); }
+        if (it.type === 'linear') { for (let i = 1; i < it.points.length; i++) line(it.points[i - 1], it.points[i], col, 2); const l = it.points[it.points.length - 1]; text(fmtQty(breakdown(it)), [l[0] + 4, l[1] - 4], 7, col); }
+        else if (it.type === 'area') {
+          const sgn = pts => pts.reduce((s, q, i) => { const r2 = pts[(i + 1) % pts.length]; return s + q[0] * r2[1] - r2[0] * q[1]; }, 0);
+          const outer = it.points, rings = [outer, ...(it.holes || []).map(h => Math.sign(sgn(h)) === Math.sign(sgn(outer)) ? [...h].reverse() : h)];
+          pg.drawSvgPath(rings.map(r2 => path(r2, true)).join(' '), { x: 0, y: 0, color: col, opacity: 0.2, borderColor: col, borderWidth: 1.5 });
+          text(fmtQty(breakdown(it)), centroid(outer), 7, col);
+        } else if (it.type === 'count') it.points.forEach((q, i) => { const [x, y] = P(q); pg.drawCircle({ x, y, size: 4, color: col, borderColor: rgb(1, 1, 1), borderWidth: 0.8 }); pg.drawText(String(i + 1), { x: x + 5, y: y + 3, size: 6, font, color: col }); });
+        else if (it.type === 'cloud') pg.drawSvgPath(path(cloudPoly(it.points[0], it.points[1]), true), { x: 0, y: 0, borderColor: red, borderWidth: 1.5 });
+        else if (it.type === 'highlight') pg.drawSvgPath(path([[it.points[0][0], it.points[0][1]], [it.points[1][0], it.points[0][1]], [it.points[1][0], it.points[1][1]], [it.points[0][0], it.points[1][1]]], true), { x: 0, y: 0, color: rgb(0.98, 0.69, 0.02), opacity: 0.35 });
+        else if (it.type === 'arrow') { const [a, b] = it.points, ang = Math.atan2(b[1] - a[1], b[0] - a[0]); line(a, b, red, 1.5); line(b, [b[0] - 10 * Math.cos(ang - 0.4), b[1] - 10 * Math.sin(ang - 0.4)], red, 1.5); line(b, [b[0] - 10 * Math.cos(ang + 0.4), b[1] - 10 * Math.sin(ang + 0.4)], red, 1.5); }
+        else if (it.type === 'callout') { const [a, b] = it.points; line(a, b, red, 1.2); const w = font.widthOfTextAtSize(pdfSafe(it.text), 8) + 8; const bx = b[0] >= a[0] ? b[0] : b[0] - w; pg.drawSvgPath(path([[bx, b[1] - 7], [bx + w, b[1] - 7], [bx + w, b[1] + 7], [bx, b[1] + 7]], true), { x: 0, y: 0, color: rgb(1, 1, 1), borderColor: red, borderWidth: 1 }); text(it.text, [bx + 4, b[1] + 3], 8, red); }
+        else if (it.type === 'text') text(it.text, it.points[0], 10, red, bold);
+        else if (it.type === 'stamp') { const [lbl, sc] = STAMPS[it.stamp] || STAMPS.reviewed; const col2 = hexRgb(sc), w = bold.widthOfTextAtSize(lbl, 14) + 16, q = it.points[0]; pg.drawSvgPath(path([[q[0] - w / 2, q[1] - 16], [q[0] + w / 2, q[1] - 16], [q[0] + w / 2, q[1] + 14], [q[0] - w / 2, q[1] + 14]], true), { x: 0, y: 0, borderColor: col2, borderWidth: 2 }); text(lbl, [q[0] - w / 2 + 8, q[1] + 1], 14, col2, bold); text(it.date || '', [q[0] - w / 2 + 8, q[1] + 10], 6, col2); }
+        else if (it.type === 'photo' && it.img) { try { const im = await out.embedJpg(it.img); const w = 140, h = w * im.height / im.width; const [x, y] = P(it.points[0]); pg.drawImage(im, { x, y: y - h, width: w, height: h }); } catch (e) { } }
+      }
+      // legend box in the upper-left corner
+      if (legend.size) {
+        const rows = [...legend.values()], x0 = 14, y0 = 14, w = 230, rh = 11, h = 16 + rows.length * rh;
+        pg.drawSvgPath(path([[x0, y0], [x0 + w, y0], [x0 + w, y0 + h], [x0, y0 + h]], true), { x: 0, y: 0, color: rgb(1, 1, 1), opacity: 0.92, borderColor: rgb(0.4, 0.4, 0.45), borderWidth: 0.6 });
+        text('TAKEOFF - ' + sh.name, [x0 + 6, y0 + 10], 7, rgb(0.1, 0.1, 0.15), bold);
+        rows.forEach((L, i) => { const y = y0 + 20 + i * rh; pg.drawSvgPath(path([[x0 + 6, y - 6], [x0 + 13, y - 6], [x0 + 13, y + 1], [x0 + 6, y + 1]], true), { x: 0, y: 0, color: hexRgb(L.c.color) }); text(L.c.name, [x0 + 17, y], 6.5, rgb(0.1, 0.1, 0.15)); text(L.ok ? fmtQty({ ...L, ok: true }) : 'not scaled', [x0 + 170, y], 6.5, rgb(0.1, 0.1, 0.15)); });
+      }
+    }
+    const bytes = await out.save();
+    download(new Blob([bytes], { type: 'application/pdf' }), baseName() + '_markups.pdf');
+    toast('PDF con marcas descargado');
+  } catch (err) { console.error(err); toast('No se pudo generar el PDF: ' + err.message); }
+}
+$('#btnPdfOut').addEventListener('click', exportMarkedPdf);
 $('#btnSnap').addEventListener('click', () => S.pdf && toggleSnap());
 $('#zoomIn').addEventListener('click', () => setZoom(S.zoom * 1.25));
 $('#zoomOut').addEventListener('click', () => setZoom(S.zoom / 1.25));
@@ -1535,6 +1713,17 @@ const UI_EN = {
   'El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio.': 'The browser blocked the window. Allow pop-ups for this site.',
   'Lista de precios exportada. Llena precios y horas y vuelve a importarla.': 'Price list exported. Fill in prices and hours, then import it back.',
   'No encontré materiales con el mismo nombre': 'No materials with matching names were found',
+  'PDF con marcas': 'Marked-up PDF', 'Comparar revisión': 'Compare revision', 'Descargar los planos con todas las marcas y una leyenda': 'Download the drawings with every markup and a legend',
+  'Comparar esta hoja con otra revisión del plano': 'Compare this sheet with another revision of the drawing', 'Anotaciones de revisión': 'Review markups', 'Anotar…': 'Markup…',
+  'Nube (R)': 'Cloud (R)', 'Texto (T)': 'Text (T)', 'Flecha (W)': 'Arrow (W)', 'Callout (Q)': 'Callout (Q)', 'Resaltar (H)': 'Highlight (H)', 'Sello (M)': 'Stamp (M)', 'Foto (F)': 'Photo (F)',
+  'Flecha': 'Arrow', 'Callout': 'Callout', 'Resaltar': 'Highlight', 'Sello': 'Stamp', 'Foto': 'Photo', 'Cerrar': 'Close',
+  'Clic en el inicio y luego en la punta de la flecha': 'Click the start, then the arrow tip', 'Clic en el punto a señalar y luego donde va el texto': 'Click the point to call out, then where the text goes',
+  'Clic en dos esquinas opuestas del área a resaltar': 'Click two opposite corners of the area to highlight', 'Clic donde va el sello': 'Click where the stamp goes', 'Clic donde va la foto y elige la imagen': 'Click where the photo goes and pick the image',
+  'Foto agregada. Doble clic en el ícono para verla.': 'Photo added. Double-click the icon to view it.', 'No se pudo leer la imagen': 'Could not read the image',
+  'Solo en la versión actual': 'Only in the current version', 'Nuevo en la revisión': 'New in the revision', 'Usar la revisión en esta hoja': 'Use the revision on this sheet', 'Salir': 'Exit',
+  'Cambios marcados en rojo y azul': 'Changes marked in red and blue', 'No encontré diferencias en esta hoja': 'No differences found on this sheet',
+  'La hoja ahora usa la revisión. Tus mediciones se conservaron.': 'The sheet now uses the revision. Your takeoffs were kept.', 'Generando PDF…': 'Creating PDF…', 'PDF con marcas descargado': 'Marked-up PDF downloaded',
+  'No se cargó la librería de PDF': 'The PDF library did not load',
   'Hojas': 'Sheets', '+ PDF': '+ PDF', 'Agregar otro PDF al proyecto': 'Add another PDF to the project', 'Nombre de la hoja': 'Sheet name', 'Deducir': 'Deduct', 'Snap': 'Snap',
   'Deducir un hueco de un área (D)': 'Deduct an opening from an area (D)', 'Ajustar a líneas del plano y a puntos de otras mediciones (S)': 'Snap to drawing lines and to points of other takeoffs (S)',
   'Dibuja el hueco dentro de un área: clic en cada vértice, doble clic o Enter para restarlo': 'Draw the opening inside an area: click each corner, double-click or Enter to subtract it',
@@ -1547,6 +1736,7 @@ const UI_PATTERNS = [
   [/^Actual: (.*)$/, (m, a) => 'Current: ' + trUI(a)],
   [/^([\d.,]+) pza$/, (m, a) => a + ' EA'],
   [/^\((\d+) sin escala\)$/, (m, a) => `(${a} not scaled)`],
+  [/^No se pudo (comparar|generar el PDF): (.*)$/, (m, a, b) => (a === 'comparar' ? 'Could not compare: ' : 'Could not create the PDF: ') + b],
   [/^Falta abrir: (.*)\. Usa “\+ PDF”\.$/, (m, a) => `Still need to open: ${a}. Use “+ PDF”.`],
   [/^Abre “(.*)” con “\+ PDF” para ver esta hoja$/, (m, a) => `Open “${a}” with “+ PDF” to see this sheet`],
   [/^(.*) · p(\d+)( · sin escala)?$/, (m, a, b, c) => `${a} · p${b}${c ? ' · not scaled' : ''}`],

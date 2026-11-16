@@ -39,6 +39,11 @@ La interfaz está **en inglés** por defecto; cambia a español con el selector 
 - **Deducir (D)**: dibuja un hueco dentro de un área (shafts, columnas) y se resta solo.
 - **Filtros**: el punto junto a cada condición la muestra u oculta en el plano; el control *Marcas* cambia la opacidad.
 
+## Revisión y anotaciones
+- **Anotar…**: nube (R), texto (T), flecha (W), callout (Q), resaltado (H), sello (M: Approved, Reviewed, Revise & Resubmit, Rejected, Field Verify, Not in Contract) y foto (F). Doble clic en una foto para verla, o en un texto/callout para editarlo.
+- **PDF con marcas**: descarga todas las hojas con las mediciones, anotaciones y una leyenda de cantidades por hoja.
+- **Comparar revisión**: elige el PDF de la nueva revisión; la hoja se empareja por su número y se muestran en rojo las líneas que desaparecen y en azul las nuevas. **Usar la revisión** cambia el plano de la hoja y conserva tus mediciones.
+
 ## Condiciones
 Cada condición define sistema, material, tamaño, forma de ducto (ancho×alto o diámetro), largo de pieza, separación de soportes, % de desperdicio y precio unitario.
 Puedes editar la hoja *Condiciones* del Excel exportado y volver a cargarla con **Importar**.
