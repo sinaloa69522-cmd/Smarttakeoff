@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SmartTakeoff</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#d9480f">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <script src="lib/pdf.min.js"></script>
 <script src="lib/xlsx.full.min.js"></script>
 <script src="lib/pdf-lib.min.js"></script>
@@ -169,6 +174,9 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
     <div class="grp">
       <button id="undo" title="Deshacer (Ctrl+Z)">↶</button>
       <button id="redo" title="Rehacer (Ctrl+Y)">↷</button>
+    </div>
+    <div class="grp">
+      <button id="btnInstall" class="primary" hidden title="Instalar SmartTakeoff en este equipo como una app">⤓ Instalar app</button>
     </div>
     <div class="grp">
       <select id="uiLang" title="Idioma de la app"><option value="en">English</option><option value="es">Español</option></select>
@@ -2504,6 +2512,51 @@ UI_PATTERNS.unshift(
   [/^Altura de muro \((.*)\)$/, (m, a) => `Wall height (${a})`],
   [/^Espesor \((.*)\)$/, (m, a) => `Thickness (${a})`]
 );
+
+
+/* ---------- Install as an app (PWA) + Windows installer ---------- */
+const WIN_SETUP = 'https://github.com/sinaloa69522-cmd/Smarttakeoff/releases/latest/download/SmartTakeoff-Setup.exe';
+let installEvt = null;
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true || /Electron/.test(navigator.userAgent);
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (!isStandalone()) $('#btnInstall').hidden = false; });
+window.addEventListener('appinstalled', () => { $('#btnInstall').hidden = true; installEvt = null; toast('SmartTakeoff quedó instalada. Búscala en tu escritorio o menú de inicio.'); });
+if (!isStandalone() && /^https?:$/.test(location.protocol)) $('#btnInstall').hidden = false;
+function installHelp() {
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const win = /Windows/.test(navigator.userAgent);
+  modal(`<h3>Instalar SmartTakeoff</h3>
+    ${uiLang === 'en'
+      ? (ios ? `<p>On iPhone or iPad, in Safari: tap <b>Share</b> (the square with the arrow) and then <b>Add to Home Screen</b>.</p>`
+        : `<p>In Chrome or Edge: click the install icon at the right end of the address bar (a screen with an arrow), or open the <b>⋮</b> menu and choose <b>Install SmartTakeoff</b> (in Edge: <b>Apps › Install this site as an app</b>).</p>`)
+      : (ios ? `<p>En iPhone o iPad, desde Safari: toca <b>Compartir</b> (el cuadro con la flecha) y luego <b>Agregar a pantalla de inicio</b>.</p>`
+        : `<p>En Chrome o Edge: haz clic en el ícono de instalar que aparece al final de la barra de direcciones (una pantalla con una flecha), o abre el menú <b>⋮</b> y elige <b>Instalar SmartTakeoff</b> (en Edge: <b>Aplicaciones › Instalar este sitio como aplicación</b>).</p>`)}
+    <p>La app instalada abre en su propia ventana, funciona sin internet y se actualiza sola.</p>
+    ${win || !ios ? `<h4 style="margin:14px 0 4px">Versión de escritorio para Windows</h4><p>También puedes descargar el instalador clásico (.exe).</p><p><a href="${WIN_SETUP}" target="_blank" rel="noopener"><button type="button" class="primary">Descargar para Windows</button></a></p>` : ''}`,
+    [{ t: 'Cerrar' }]);
+}
+$('#btnInstall').addEventListener('click', async () => {
+  if (installEvt) {
+    installEvt.prompt();
+    const r = await installEvt.userChoice; installEvt = null;
+    if (r && r.outcome === 'accepted') $('#btnInstall').hidden = true;
+    return;
+  }
+  installHelp();
+});
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => { });
+// Opened from a .pdf / .takeoff file with the installed app
+if ('launchQueue' in window) launchQueue.setConsumer(async params => {
+  for (const h of params.files || []) {
+    const f = await h.getFile();
+    if (/\.pdf$/i.test(f.name)) await openPdf(f, !!S.pdf); else await loadProjectFile(await f.text(), h);
+  }
+});
+Object.assign(UI_EN, {
+  '⤓ Instalar app': '⤓ Install app', 'Instalar SmartTakeoff en este equipo como una app': 'Install SmartTakeoff on this device as an app', 'Instalar SmartTakeoff': 'Install SmartTakeoff',
+  'La app instalada abre en su propia ventana, funciona sin internet y se actualiza sola.': 'The installed app opens in its own window, works offline and updates itself.',
+  'Versión de escritorio para Windows': 'Desktop version for Windows', 'También puedes descargar el instalador clásico (.exe).': 'You can also download the classic installer (.exe).',
+  'Descargar para Windows': 'Download for Windows', 'Cerrar': 'Close', 'SmartTakeoff quedó instalada. Búscala en tu escritorio o menú de inicio.': 'SmartTakeoff is installed. Find it on your desktop or Start menu.'
+});
 
 /* ---------- Init ---------- */
 S.conditions = presetConditions(); S.activeCond = S.conditions[0].id; S.est = defaultEst();
