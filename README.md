@@ -49,6 +49,13 @@ La interfaz está **en inglés** por defecto; cambia a español con el selector 
 - **PDF con marcas**: descarga todas las hojas con las mediciones, anotaciones y una leyenda de cantidades por hoja.
 - **Comparar revisión**: elige el PDF de la nueva revisión; la hoja se empareja por su número y se muestran en rojo las líneas que desaparecen y en azul las nuevas. **Usar la revisión** cambia el plano de la hoja y conserva tus mediciones.
 
+## Guardar en OneDrive o Dropbox
+
+- **Guardar** (Ctrl+S) crea un archivo `.takeoff` con todo el proyecto: mediciones, condiciones, precios y los planos PDF incluidos. Elige una carpeta de OneDrive, Dropbox o Google Drive y se sincroniza sola entre tus equipos.
+- Desde ese momento la app guarda los cambios automáticamente en ese mismo archivo (abajo verás "Guardado" con la hora). Ctrl+Shift+S guarda una copia con otro nombre.
+- **Abrir proyecto** o arrastrar un `.takeoff` a la ventana lo abre con sus planos. En la versión de escritorio, doble clic en el archivo.
+- El autoguardado directo funciona en Chrome y Edge. En Safari o Firefox, Guardar descarga el `.takeoff` y tú lo mueves a la carpeta.
+
 ## Condiciones
 Cada condición define sistema, material, tamaño, forma de ducto (ancho×alto o diámetro), largo de pieza, separación de soportes, % de desperdicio y precio unitario.
 Puedes editar la hoja *Condiciones* del Excel exportado y volver a cargarla con **Importar**.

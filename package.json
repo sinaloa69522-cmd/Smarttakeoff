@@ -21,6 +21,6 @@
     "directories": { "output": "dist", "buildResources": "build" },
     "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },
     "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true, "shortcutName": "SmartTakeoff" },
-    "fileAssociations": [{ "ext": "json", "name": "SmartTakeoff project", "role": "Editor" }]
+    "fileAssociations": [{ "ext": "takeoff", "name": "SmartTakeoff project", "role": "Editor" }]
   }
 }

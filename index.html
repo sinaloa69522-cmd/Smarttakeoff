@@ -128,13 +128,13 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
     <div class="grp">
       <button id="btnOpen" title="Abrir plano PDF">Abrir PDF</button>
       <input id="filePdf" type="file" accept="application/pdf,.pdf" hidden>
-      <button id="btnSave" title="Guardar proyecto (.json)">Guardar</button>
-      <button id="btnLoad" title="Abrir proyecto (.json)">Abrir proyecto</button>
+      <button id="btnSave" title="Guardar el proyecto con sus planos en un archivo .takeoff (Ctrl+S). Guárdalo en tu carpeta de OneDrive o Dropbox.">Guardar</button>
+      <button id="btnLoad" title="Abrir un proyecto .takeoff">Abrir proyecto</button>
       <button id="btnPdfOut" title="Descargar los planos con todas las marcas y una leyenda">PDF con marcas</button>
       <button id="btnCompare" title="Comparar esta hoja con otra revisión del plano">Comparar revisión</button>
       <input id="fileCmp" type="file" accept="application/pdf,.pdf" hidden>
       <input id="filePhoto" type="file" accept="image/*" hidden>
-      <input id="fileJson" type="file" accept=".json,application/json" hidden>
+      <input id="fileJson" type="file" accept=".takeoff,.json,application/json" hidden>
     </div>
     <div class="grp" id="tools">
       <button class="tool" data-tool="select" title="Seleccionar / mover (V)">Seleccionar<kbd>V</kbd></button>
@@ -219,6 +219,7 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
     <span id="stScale">Escala: <b class="nocal">sin calibrar</b></span>
     <span id="stLive"></span>
     <span style="flex:1"></span>
+    <span id="stSave"></span>
     <span id="stHint"></span>
   </footer>
 </div>
@@ -460,7 +461,9 @@ let saveT;
 function autosave() {
   clearTimeout(saveT);
   saveT = setTimeout(() => { try { if (S.fileName) localStorage.setItem('smarttakeoff:' + S.fileName, JSON.stringify(projectData())); } catch (e) { } }, 300);
+  if (S.fileHandle) { S.dirty = true; renderSaveState(); clearTimeout(fileT); fileT = setTimeout(() => writeProjectFile(false), 4000); }
 }
+let fileT;
 function loadProjectData(o) {
   if (!o || !Array.isArray(o.items)) throw new Error('Archivo de proyecto no válido');
   S.units = o.units || 'imperial'; S.pages = o.pages || {}; S.items = o.items; S.conditions = o.conditions || []; S.est = Object.assign(defaultEst(), o.est || {}); S.sheets = Array.isArray(o.sheets) ? o.sheets : [];
@@ -494,7 +497,7 @@ async function openPdf(file, append) {
     let restored = false;
     if (!append) {
       const sameProject = S.fileName === file.name && S.items.length;
-      S.fileName = file.name; S.pdfs = {}; S.pdfBytes = {};
+      S.fileName = file.name; S.pdfs = {}; S.pdfBytes = {}; S.fileHandle = null; renderSaveState();
       if (!sameProject) {
         S.items = []; S.pages = {}; S.undo = []; S.redo = []; S.sheets = [];
         try { const saved = localStorage.getItem('smarttakeoff:' + file.name); if (saved) { loadProjectData(JSON.parse(saved)); restored = true; } } catch (e) { }
@@ -954,7 +957,7 @@ window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }
-  if ((e.ctrlKey || e.metaKey) && k === 's') { e.preventDefault(); saveProject(); return; }
+  if ((e.ctrlKey || e.metaKey) && k === 's') { e.preventDefault(); saveProject(e.shiftKey); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === ' ') { spaceDown = true; ov.style.cursor = 'grab'; e.preventDefault(); return; }
   if (e.key === 'Escape') { S.draft = null; S.openCount = null; $('#stLive').textContent = ''; if (S.tool !== 'select') setTool('select'); else select(null); return; }
@@ -1486,21 +1489,73 @@ $('#fileCond').addEventListener('change', async e => {
 });
 
 /* ---------- Project save/load ---------- */
-function saveProject() {
-  if (!S.fileName) { toast('Abre un plano primero'); return; }
-  download(new Blob([JSON.stringify(projectData(), null, 1)], { type: 'application/json' }), baseName() + '.takeoff.json');
+/* ---------- Project files (.takeoff) with the drawings inside ----------
+   Saved to any folder the user picks, e.g. OneDrive or Dropbox, so the sync app carries it to their other computers.
+   Where the browser supports it (Chrome, Edge, the desktop app) the file stays linked and saves itself after each change. */
+const canPickFiles = 'showSaveFilePicker' in window;
+const PICK_TYPES = [{ description: 'SmartTakeoff project', accept: { 'application/json': ['.takeoff'] } }];
+function b64(buf) { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
+function unb64(str) { const bin = atob(str); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+let pdfCache = { key: '', data: null };
+function projectFileData() {
+  const docs = [...new Set(S.sheets.map(x => x.doc))].filter(d => S.pdfBytes[d]);
+  const key = docs.map(d => d + ':' + S.pdfBytes[d].byteLength).join('|');
+  if (pdfCache.key !== key) pdfCache = { key, data: docs.map(d => ({ name: d, data: b64(S.pdfBytes[d]) })) };   // encode the drawings once, not on every autosave
+  return JSON.stringify({ ...projectData(), version: 2, pdfs: pdfCache.data });
 }
-$('#btnSave').addEventListener('click', saveProject);
-$('#btnLoad').addEventListener('click', () => $('#fileJson').click());
-$('#fileJson').addEventListener('change', async e => {
-  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+function renderSaveState() {
+  const el = $('#stSave'); if (!el) return;
+  if (!S.fileHandle) { el.textContent = ''; return; }
+  el.innerHTML = S.dirty ? `<b>${esc(S.fileHandle.name)}</b> · Guardando…` : `<b>${esc(S.fileHandle.name)}</b> · Guardado ${S.savedAt || ''}`;
+}
+async function writeProjectFile(manual) {
+  if (!S.fileHandle) return;
   try {
-    const o = JSON.parse(await f.text());
-    loadProjectData(o); S.fileName = o.fileName || S.fileName; S.undo = []; S.redo = [];
+    const w = await S.fileHandle.createWritable(); await w.write(projectFileData()); await w.close();
+    S.dirty = false; S.savedAt = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); renderSaveState();
+    if (manual) toast('Proyecto guardado en ' + S.fileHandle.name);
+  } catch (err) { console.error(err); S.dirty = true; renderSaveState(); toast('No se pudo guardar el archivo: ' + err.message); }
+}
+async function saveProject(asNew) {
+  if (!S.fileName) { toast('Abre un plano primero'); return; }
+  if (!canPickFiles) { download(new Blob([projectFileData()], { type: 'application/json' }), baseName() + '.takeoff'); toast('Proyecto descargado. Muévelo a tu carpeta de OneDrive o Dropbox.'); return; }
+  if (!S.fileHandle || asNew) {
+    try { S.fileHandle = await window.showSaveFilePicker({ suggestedName: baseName() + '.takeoff', types: PICK_TYPES }); }
+    catch (err) { if (err.name !== 'AbortError') toast('No se pudo guardar el archivo: ' + err.message); return; }
+  }
+  await writeProjectFile(true);
+}
+async function loadProjectFile(text, handle) {
+  const o = JSON.parse(text);
+  loadProjectData(o); S.fileName = o.fileName || S.fileName; S.undo = []; S.redo = []; S.selected = null;
+  S.fileHandle = handle || null; S.dirty = false; S.savedAt = '';
+  if (Array.isArray(o.pdfs) && o.pdfs.length) {
+    S.pdfs = {}; S.pdfBytes = {}; S.pdf = null;
+    const fh = S.fileHandle; S.fileHandle = null;                 // don't autosave while the drawings are loading
+    for (const d of o.pdfs) await openPdf(new File([unb64(d.data)], d.name, { type: 'application/pdf' }), true);
+    S.fileHandle = fh; S.dirty = false;
+    if (S.numPages) await gotoPage(1, true);
+    toast('Proyecto abierto con ' + o.pdfs.length + ' plano(s)');
+  } else {
     refresh();
     toast(S.pdf ? 'Proyecto cargado' : `Proyecto cargado. Ahora abre el plano “${o.fileName}”.`);
-  } catch (err) { toast('No se pudo abrir el proyecto: ' + err.message); }
+  }
+  renderSaveState();
+}
+$('#btnSave').addEventListener('click', () => saveProject(false));
+$('#btnLoad').addEventListener('click', async () => {
+  if (!canPickFiles) { $('#fileJson').click(); return; }
+  try {
+    const [h] = await window.showOpenFilePicker({ types: [{ description: 'SmartTakeoff project', accept: { 'application/json': ['.takeoff', '.json'] } }] });
+    const f = await h.getFile();
+    await loadProjectFile(await f.text(), /\.takeoff$/i.test(f.name) ? h : null);
+  } catch (err) { if (err.name !== 'AbortError') toast('No se pudo abrir el proyecto: ' + err.message); }
 });
+$('#fileJson').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { await loadProjectFile(await f.text(), null); } catch (err) { toast('No se pudo abrir el proyecto: ' + err.message); }
+});
+window.addEventListener('beforeunload', e => { if (S.fileHandle && S.dirty) { writeProjectFile(false); e.preventDefault(); e.returnValue = ''; } });
 
 /* ---------- Open PDF (button + drag & drop) ---------- */
 $('#btnOpen').addEventListener('click', () => $('#filePdf').click());
@@ -1510,6 +1565,8 @@ const viewer = $('#viewer');
 ['dragenter', 'dragover'].forEach(t => viewer.addEventListener(t, e => { e.preventDefault(); viewer.classList.add('drag'); }));
 ['dragleave', 'drop'].forEach(t => viewer.addEventListener(t, e => { e.preventDefault(); viewer.classList.remove('drag'); }));
 viewer.addEventListener('drop', e => {
+  const t = [...e.dataTransfer.files].find(f => /\.(takeoff|json)$/i.test(f.name));
+  if (t) { t.text().then(x => loadProjectFile(x, null)).catch(err => toast('No se pudo abrir el proyecto: ' + err.message)); return; }
   const f = [...e.dataTransfer.files].find(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
   if (f) openPdf(f); else toast('Suelta un archivo PDF');
 });
@@ -1713,6 +1770,8 @@ const UI_EN = {
   'El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio.': 'The browser blocked the window. Allow pop-ups for this site.',
   'Lista de precios exportada. Llena precios y horas y vuelve a importarla.': 'Price list exported. Fill in prices and hours, then import it back.',
   'No encontré materiales con el mismo nombre': 'No materials with matching names were found',
+  'Guardando…': 'Saving…', 'Guardar el proyecto con sus planos en un archivo .takeoff (Ctrl+S). Guárdalo en tu carpeta de OneDrive o Dropbox.': 'Save the project and its drawings to a .takeoff file (Ctrl+S). Keep it in your OneDrive or Dropbox folder.',
+  'Abrir un proyecto .takeoff': 'Open a .takeoff project', 'Proyecto descargado. Muévelo a tu carpeta de OneDrive o Dropbox.': 'Project downloaded. Move it to your OneDrive or Dropbox folder.',
   'PDF con marcas': 'Marked-up PDF', 'Comparar revisión': 'Compare revision', 'Descargar los planos con todas las marcas y una leyenda': 'Download the drawings with every markup and a legend',
   'Comparar esta hoja con otra revisión del plano': 'Compare this sheet with another revision of the drawing', 'Anotaciones de revisión': 'Review markups', 'Anotar…': 'Markup…',
   'Nube (R)': 'Cloud (R)', 'Texto (T)': 'Text (T)', 'Flecha (W)': 'Arrow (W)', 'Callout (Q)': 'Callout (Q)', 'Resaltar (H)': 'Highlight (H)', 'Sello (M)': 'Stamp (M)', 'Foto (F)': 'Photo (F)',
@@ -1737,6 +1796,10 @@ const UI_PATTERNS = [
   [/^([\d.,]+) pza$/, (m, a) => a + ' EA'],
   [/^\((\d+) sin escala\)$/, (m, a) => `(${a} not scaled)`],
   [/^No se pudo (comparar|generar el PDF): (.*)$/, (m, a, b) => (a === 'comparar' ? 'Could not compare: ' : 'Could not create the PDF: ') + b],
+  [/^Guardado (.*)$/, (m, a) => 'Saved ' + a],
+  [/^Proyecto guardado en (.*)$/, (m, a) => 'Project saved to ' + a],
+  [/^Proyecto abierto con (\d+) plano\(s\)$/, (m, a) => `Project opened with ${a} drawing(s)`],
+  [/^No se pudo guardar el archivo: (.*)$/, (m, a) => 'Could not save the file: ' + a],
   [/^Falta abrir: (.*)\. Usa “\+ PDF”\.$/, (m, a) => `Still need to open: ${a}. Use “+ PDF”.`],
   [/^Abre “(.*)” con “\+ PDF” para ver esta hoja$/, (m, a) => `Open “${a}” with “+ PDF” to see this sheet`],
   [/^(.*) · p(\d+)( · sin escala)?$/, (m, a, b, c) => `${a} · p${b}${c ? ' · not scaled' : ''}`],
