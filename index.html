@@ -6,6 +6,7 @@
 <title>SmartTakeoff</title>
 <script src="lib/pdf.min.js"></script>
 <script src="lib/xlsx.full.min.js"></script>
+<script src="lib/pdf-lib.min.js"></script>
 <style>
 :root{
   --bg:#f4f5f7; --panel:#ffffff; --ink:#1d2330; --muted:#677084; --line:#dde1e8;
@@ -39,7 +40,7 @@ header .brand{font-weight:700;letter-spacing:.2px;margin-right:6px}
 header .brand span{color:var(--accent)}
 .grp{display:flex;gap:3px;align-items:center;padding-right:8px;margin-right:2px;border-right:1px solid var(--line)}
 .grp:last-child{border-right:0}
-.tool kbd{font-size:10px;opacity:.6;margin-left:3px}
+.tool kbd,#btnSnap kbd{font-size:10px;opacity:.6;margin-left:3px}
 aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 aside h3{margin:0;padding:10px 10px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
 #condList{overflow:auto;flex:1;padding:0 6px 6px}
@@ -52,11 +53,27 @@ aside h3{margin:0;padding:10px 10px 6px;font-size:11px;text-transform:uppercase;
 .cond .nm small{color:var(--muted)}
 .cond .q{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px;text-align:right}
 .cond .ed{visibility:hidden;padding:1px 6px}
+.cond .eye{padding:0 5px;border:0;background:transparent;color:var(--muted);font-size:11px}
+.cond .eye.off{color:var(--line)}
+.cond.hid .nm{opacity:.5}
 .cond:hover .ed{visibility:visible}
-#pageList{max-height:28vh;overflow:auto;padding:0 6px 8px;display:flex;flex-wrap:wrap;gap:4px}
-#pageList button{min-width:36px}
-main{display:grid;grid-template-rows:1fr 230px;grid-template-columns:minmax(0,1fr);min-height:0;min-width:0}
+#pageList{max-height:30vh;overflow:auto;padding:0 6px 8px;display:flex;flex-direction:column;gap:3px}
+#pageList .sheet{display:grid;grid-template-columns:1fr auto;text-align:left;padding:4px 8px}
+#pageList .sheet b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pageList .sheet small{grid-column:1;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pageList .sheet.on small{color:inherit;opacity:.85}
+#pageList .sheet .cnt{grid-row:1/3;grid-column:2;align-self:center;font-size:11px;background:var(--hover);color:var(--ink);border-radius:9px;padding:0 6px}
+#pageList .sheet.missing{opacity:.55;border-style:dashed}
+main{display:grid;grid-template-rows:1fr 6px var(--bottomH,260px);grid-template-columns:minmax(0,1fr);min-height:0;min-width:0}
 #viewer{position:relative;overflow:auto;background:var(--viewer);min-height:0}
+#tradeSel{margin:0 10px 6px;width:calc(100% - 20px)}
+.trh{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:8px 6px 2px;font-weight:600}
+#pageList .sheet .disc{font-weight:500;font-size:10px;background:var(--hover);color:var(--muted);border-radius:8px;padding:0 5px;margin-left:5px}
+#findBar{position:sticky;top:0;left:0;z-index:5;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:6px 10px;background:var(--panel);border-bottom:2px solid #7048e8}
+#findBar label{display:flex;gap:4px;align-items:center}
+#cmpBar{position:sticky;top:0;left:0;z-index:5;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+#cmpBar .lg{display:flex;align-items:center;gap:4px;color:var(--muted)}
+#cmpBar .lg i{width:12px;height:12px;border-radius:2px;display:inline-block}
 #stage{position:relative;margin:24px;display:inline-block;box-shadow:0 2px 12px rgba(0,0,0,.25);background:#fff}
 #pdfCanvas{display:block}
 #overlay{position:absolute;left:0;top:0;user-select:none}
@@ -65,6 +82,8 @@ main{display:grid;grid-template-rows:1fr 230px;grid-template-columns:minmax(0,1f
 #empty h2{margin:0 0 6px;font-size:18px}
 #empty p{margin:0 0 14px;color:var(--muted)}
 #viewer.drag #empty .box{border-color:var(--accent)}
+#split{cursor:row-resize;background:var(--line)}
+#split:hover{background:var(--accent)}
 #bottom{background:var(--panel);border-top:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 #tabs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--line)}
 #tabs .sp{flex:1}
@@ -87,8 +106,19 @@ footer b{color:var(--ink);font-weight:600}
 .form input,.form select{width:100%}
 .form .row2{display:flex;gap:6px}
 .form .hint{grid-column:1/3;color:var(--muted);font-size:12px;margin-top:-2px}
-.asmRow{display:grid;grid-template-columns:minmax(0,2.2fr) 64px minmax(0,1.6fr) 56px 76px auto;gap:5px;margin-bottom:5px}
+.asmRow{display:grid;grid-template-columns:minmax(0,2.2fr) 60px minmax(0,1.6fr) 52px 70px 60px auto;gap:5px;margin-bottom:5px}
 .asmRow input,.asmRow select{min-width:0}
+.asmHdr{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
+.est{display:flex;flex-wrap:wrap;gap:18px;padding:10px 12px;align-items:flex-start}
+.estCol{display:flex;flex-direction:column;gap:8px;min-width:280px}
+.estForm{grid-template-columns:180px 90px}
+.estBtns{display:flex;gap:6px;flex-wrap:wrap}
+.estTot{width:auto;min-width:300px}
+.estTot td{white-space:nowrap}
+.estTot tr.sub td{font-weight:600;border-top:2px solid var(--line)}
+.estTot tr.grand td{font-weight:700;font-size:15px;border-top:2px solid var(--ink);color:var(--accent)}
+.estSys{width:auto;min-width:420px}
+textarea{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 6px;width:100%;resize:vertical}
 .actions{display:flex;justify-content:flex-end;gap:6px;margin-top:14px}
 #toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60;max-width:90vw}
 #toast.show{opacity:.95}
@@ -103,9 +133,13 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
     <div class="grp">
       <button id="btnOpen" title="Abrir plano PDF">Abrir PDF</button>
       <input id="filePdf" type="file" accept="application/pdf,.pdf" hidden>
-      <button id="btnSave" title="Guardar proyecto (.json)">Guardar</button>
-      <button id="btnLoad" title="Abrir proyecto (.json)">Abrir proyecto</button>
-      <input id="fileJson" type="file" accept=".json,application/json" hidden>
+      <button id="btnSave" title="Guardar el proyecto con sus planos en un archivo .takeoff (Ctrl+S). Guárdalo en tu carpeta de OneDrive o Dropbox.">Guardar</button>
+      <button id="btnLoad" title="Abrir un proyecto .takeoff">Abrir proyecto</button>
+      <button id="btnPdfOut" title="Descargar los planos con todas las marcas y una leyenda">PDF con marcas</button>
+      <button id="btnCompare" title="Comparar esta hoja con otra revisión del plano">Comparar revisión</button>
+      <input id="fileCmp" type="file" accept="application/pdf,.pdf" hidden>
+      <input id="filePhoto" type="file" accept="image/*" hidden>
+      <input id="fileJson" type="file" accept=".takeoff,.json,application/json" hidden>
     </div>
     <div class="grp" id="tools">
       <button class="tool" data-tool="select" title="Seleccionar / mover (V)">Seleccionar<kbd>V</kbd></button>
@@ -113,8 +147,11 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
       <button class="tool" data-tool="linear" title="Medición lineal (L)">Lineal<kbd>L</kbd></button>
       <button class="tool" data-tool="area" title="Medición de área (A)">Área<kbd>A</kbd></button>
       <button class="tool" data-tool="count" title="Conteo (C)">Conteo<kbd>C</kbd></button>
-      <button class="tool" data-tool="cloud" title="Nube de revisión (R)">Nube<kbd>R</kbd></button>
-      <button class="tool" data-tool="text" title="Nota de texto (T)">Texto<kbd>T</kbd></button>
+      <button class="tool" data-tool="deduct" title="Deducir un hueco de un área (D)">Deducir<kbd>D</kbd></button>
+      <select id="annoSel" title="Anotaciones de revisión"><option value="">Anotar…</option><option value="cloud">Nube (R)</option><option value="text">Texto (T)</option><option value="arrow">Flecha (W)</option><option value="callout">Callout (Q)</option><option value="highlight">Resaltar (H)</option><option value="stamp">Sello (M)</option><option value="photo">Foto (F)</option></select>
+      <button class="tool" data-tool="symbol" title="Buscar símbolo: encierra uno y encuentra todos los iguales (B)">Buscar símbolo<kbd>B</kbd></button>
+      <button id="btnDetect" title="Detectar etiquetas de equipos y accesorios en el plano y convertirlas en conteos">Detectar</button>
+      <button id="btnSnap" class="on" title="Ajustar a líneas del plano y a puntos de otras mediciones (S)">Snap<kbd>S</kbd></button>
     </div>
     <div class="grp">
       <select id="scaleSel" title="Escala de la página"></select>
@@ -124,6 +161,10 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
       <span id="zoomLbl" style="min-width:44px;text-align:center">100%</span>
       <button id="zoomIn" title="Acercar (+)">+</button>
       <button id="zoomFit" title="Ajustar a la ventana">Ajustar</button>
+    </div>
+    <div class="grp">
+      <label for="opacity" style="color:var(--muted);font-size:12px">Marcas</label>
+      <input id="opacity" type="range" min="10" max="100" value="100" title="Opacidad de las marcas" style="width:80px">
     </div>
     <div class="grp">
       <button id="undo" title="Deshacer (Ctrl+Z)">↶</button>
@@ -139,15 +180,20 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
   </header>
 
   <aside>
-    <h3>Condiciones <span><button id="btnImportCond" title="Importar condiciones desde Excel">Importar</button> <button id="btnNewCond" class="primary" title="Nueva condición">+ Nueva</button></span></h3>
+    <h3>Condiciones <span><button id="btnLib" title="Agregar condiciones de otros oficios">Biblioteca</button> <button id="btnImportCond" title="Importar condiciones desde Excel">Importar</button> <button id="btnNewCond" class="primary" title="Nueva condición">+ Nueva</button></span></h3>
     <input id="fileCond" type="file" accept=".xlsx,.xls,.csv" hidden>
+    <input id="filePrice" type="file" accept=".xlsx,.xls,.csv" hidden>
+    <select id="tradeSel" title="Mostrar condiciones de"></select>
     <div id="condList"></div>
-    <h3>Páginas <span id="pageInfo"></span></h3>
+    <h3>Hojas <span><span id="pageInfo"></span> <button id="btnAddPdf" title="Agregar otro PDF al proyecto">+ PDF</button></span></h3>
+    <input id="filePdf2" type="file" accept="application/pdf,.pdf" multiple hidden>
     <div id="pageList"></div>
   </aside>
 
   <main>
     <div id="viewer">
+      <div id="cmpBar" hidden><span id="cmpTxt"></span><span class="lg"><i style="background:#e03131"></i>Solo en la versión actual</span><span class="lg"><i style="background:#1c7ed6"></i>Nuevo en la revisión</span><button id="cmpUse" class="primary">Usar la revisión en esta hoja</button><button id="cmpExit">Salir</button></div>
+      <div id="findBar" hidden><span id="findTxt"></span><label><input type="checkbox" id="findRot"> Incluir girados</label><select id="findSens"><option value="0.88">Estricta</option><option value="0.8" selected>Normal</option><option value="0.72">Flexible</option></select><button id="findAll">Buscar en todas las hojas</button><select id="findCond"></select><button id="findAdd" class="primary">Agregar conteos</button><button id="findExit">Cancelar</button></div>
       <div id="stage" hidden>
         <canvas id="pdfCanvas"></canvas>
         <svg id="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -160,11 +206,13 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
         </div>
       </div>
     </div>
+    <div id="split" title="Arrastra para cambiar el tamaño"></div>
     <div id="bottom">
       <div id="tabs">
         <button data-tab="detail" class="on">Detalle</button>
         <button data-tab="summary">Resumen / despiece</button>
         <button data-tab="bom">Materiales</button>
+        <button data-tab="estimate">Estimado</button>
         <span class="sp"></span>
         <select id="expLang" title="Idioma de la exportación"><option value="en">Export in English</option><option value="es">Exportar en español</option></select>
         <button id="btnCopy" title="Copiar la tabla para pegar en Excel">Copiar para Excel</button>
@@ -180,6 +228,7 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
     <span id="stScale">Escala: <b class="nocal">sin calibrar</b></span>
     <span id="stLive"></span>
     <span style="flex:1"></span>
+    <span id="stSave"></span>
     <span id="stHint"></span>
   </footer>
 </div>
@@ -201,7 +250,7 @@ if (location.protocol === 'file:') {
 /* ---------- State ---------- */
 const $ = s => document.querySelector(s);
 const S = {
-  pdf: null, fileName: '', pageNum: 1, numPages: 0, zoom: 1, pageW: 0, pageH: 0,
+  pdf: null, pdfs: {}, pdfBytes: {}, sheets: [], compare: null, fileName: '', pageNum: 1, numPages: 0, snap: true, snapHit: null, zoom: 1, pageW: 0, pageH: 0,
   tool: 'select', units: 'imperial',
   pages: {},        // page -> {cal: base units per PDF point, calLabel}
   items: [],        // measurements + annotations
@@ -218,6 +267,10 @@ const U = () => S.units === 'imperial'
 
 /* ---------- Conditions (takeoff items) ---------- */
 function presetConditions() {
+  const base = mechPlumbPresets(); base.forEach(c => { c.trade = guessTrade(c); c.ht = 0; c.th = 0; c.tags = PRESET_TAGS[c.name] || []; });
+  return [...base, ...tradePresets().map(applyDefaultLabor)];
+}
+function mechPlumbPresets() {
   // Typical US mechanical / plumbing takeoff items (names in US trade terms)
   const imp = S.units === 'imperial';
   const L = ft => imp ? ft : +(ft * 0.3048).toFixed(2);
@@ -246,7 +299,19 @@ function presetConditions() {
     c({ name: 'Fire Damper', type: 'count', color: '#c92a2a', system: 'HVAC Supply', material: 'UL 555 fire damper' }),
     c({ name: 'Ball Valve 3/4"', type: 'count', color: '#862e9c', system: 'Domestic Cold Water', material: 'Bronze', size: '3/4"' }),
     c({ name: 'Duct Wrap Insulation', type: 'area', color: '#0b7285', system: 'Insulation', material: 'Fiberglass 1-1/2" FSK', waste: 10 })
-  ];
+  ].map(applyDefaultLabor);
+}
+// Reference labor units (hours per unit). Starting points only: every company should set its own.
+const LABOR_MAIN = { 'Supply Duct 24x12': 0.35, 'Return Duct 20x10': 0.3, 'Round Duct 10"': 0.2, 'Flex Duct 8"': 0.08, 'Copper Type L 3/4"': 0.12, 'Copper Type L 1/2" HW': 0.1, 'PEX 1/2"': 0.04,
+  'Black Steel 2" Sch 40': 0.25, 'PVC DWV 4"': 0.15, 'Cast Iron No-Hub 4"': 0.2, 'Supply Diffuser 24x24': 1, 'Return Grille 24x24': 0.75, 'VAV Box': 4, 'Tee 3/4" Copper': 0.35,
+  'Reducer 3/4"x1/2" Copper': 0.25, 'Duct Transition': 1, 'Fire Damper': 2, 'Ball Valve 3/4"': 0.4, 'Duct Wrap Insulation': 0.03 };
+const LABOR_ASM = [[/^Elbow .*copper/i, 0.25], [/^Elbow .*Sch 40/i, 0.75], [/^Elbow .*PEX/i, 0.1], [/^Elbow .*round/i, 0.5], [/^Elbow .*\d+x\d+/i, 1], [/bend .*PVC/i, 0.4], [/bend .*no-hub/i, 0.4],
+  [/^Coupling .*copper/i, 0.2], [/^Coupling .*Sch 40/i, 0.6], [/^Coupling .*PVC/i, 0.25], [/^No-hub coupling/i, 0.3], [/^Clevis hanger/i, 0.3], [/^Pipe insulation/i, 0.05], [/^Hanger strap/i, 0.15],
+  [/^Duct wrap/i, 0.03], [/^Flex duct 8/i, 0.08], [/^Spin-in collar/i, 0.3], [/^PEX (crimp|clip)/i, 0.05], [/^Flex duct clamp/i, 0.05], [/^Flex duct strap/i, 0.1]];
+function applyDefaultLabor(c) {
+  if (c.labor == null) c.labor = LABOR_MAIN[c.name] || 0;
+  (c.asm || []).forEach(a => { if (a.lab != null) return; const m = LABOR_ASM.find(([re]) => re.test(a.name)); a.lab = m ? m[1] : 0; });
+  return c;
 }
 // Galvanized sheet weight, lb/ft² (incl. zinc coating)
 const GA_LB = { 26: 0.906, 24: 1.156, 22: 1.406, 20: 1.656, 18: 2.156, 16: 2.656 };
@@ -266,6 +331,7 @@ const typeName = { linear: 'Lineal', area: 'Área', count: 'Conteo', cloud: 'Nub
 const dist = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
 const polyLen = pts => pts.reduce((s, p, i) => i ? s + dist(pts[i - 1], p) : 0, 0);
 const polyArea = pts => Math.abs(pts.reduce((s, p, i) => { const q = pts[(i + 1) % pts.length]; return s + p[0] * q[1] - q[0] * p[1]; }, 0)) / 2;
+const inPoly = (p, pts) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const a = pts[i], b = pts[j]; if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
 const centroid = pts => pts.reduce((a, p) => [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length], [0, 0]);
 const cal = page => (S.pages[page] && S.pages[page].cal) || null;
 
@@ -274,7 +340,7 @@ function qty(it) {
   if (it.type === 'count') return { q: it.points.length, unit: 'pza', ok: true };
   if (!k) return { q: 0, unit: it.type === 'area' ? U().area : U().len, ok: false };
   if (it.type === 'linear') return { q: polyLen(it.points) * k, unit: U().len, ok: true };
-  if (it.type === 'area') return { q: polyArea(it.points) * k * k, unit: U().area, ok: true, per: polyLen([...it.points, it.points[0]]) * k };
+  if (it.type === 'area') return { q: Math.max(0, polyArea(it.points) - (it.holes || []).reduce((s, h) => s + polyArea(h), 0)) * k * k, unit: U().area, ok: true, per: polyLen([...it.points, it.points[0]]) * k };
   return { q: 0, unit: '', ok: false };
 }
 // Material breakdown (despiece) for one measurement
@@ -305,9 +371,15 @@ function breakdown(it) {
       o.weight = S.units === 'imperial' ? lb : lb * 0.45359;
     }
   }
-  const basis = { qty: r.ok ? qw : 0, sheet: +o.sheet || 0, hanger: +o.hangers || 0, el90, el45, elbow: el90 + el45, piece: +o.pieces || 0, drop: drops };
-  o.asm = (c.asm || []).map(a => { const q = (+a.f || 0) * (basis[a.base] || 0); return { name: a.name, unit: a.unit, price: +a.price || 0, q, cost: q * (+a.price || 0) }; }).filter(a => a.q > 0);
+  const sz = U().sizeToBase, ht = +c.ht || 0, th = +c.th || 0;
+  o.wall = it.type === 'linear' && r.ok && ht > 0 ? qw * ht : 0;
+  const v0 = r.ok && th > 0 ? (it.type === 'area' ? qw * th * sz : it.type === 'linear' && ht > 0 ? qw * ht * th * sz : 0) : 0;
+  o.vol = S.units === 'imperial' ? v0 / 27 : v0;
+  const basis = { wall: o.wall, vol: o.vol, perim: it.type === 'area' && r.ok ? r.per || 0 : 0, qty: r.ok ? qw : 0, sheet: +o.sheet || 0, hanger: +o.hangers || 0, el90, el45, elbow: el90 + el45, piece: +o.pieces || 0, drop: drops };
+  o.asm = (c.asm || []).map(a => { const q = (+a.f || 0) * (basis[a.base] || 0); return { name: a.name, unit: a.unit, price: +a.price || 0, q, cost: q * (+a.price || 0), hours: q * (+a.lab || 0) }; }).filter(a => a.q > 0);
   o.cost = o.mainCost + o.asm.reduce((s, a) => s + a.cost, 0);
+  o.mainHours = r.ok ? r.q * (+c.labor || 0) : 0;
+  o.hours = o.mainHours + o.asm.reduce((s, a) => s + a.hours, 0);
   return o;
 }
 // Count direction changes along a run: ~45° turns and ~90° turns (anything sharper counts as 90°)
@@ -321,7 +393,7 @@ function turns(pts) {
   }
   return { el90, el45 };
 }
-const ASM_BASES = [['qty', 'por unidad medida (LF/SF/EA)'], ['sheet', 'por unidad de lámina (ft²)'], ['hanger', 'por soporte'], ['el90', 'por codo 90°'], ['el45', 'por codo 45°'], ['elbow', 'por codo (cualquiera)'], ['piece', 'por tramo/pieza'], ['drop', 'por drop/riser']];
+const ASM_BASES = [['qty', 'por unidad medida (LF/SF/EA)'], ['sheet', 'por unidad de lámina (ft²)'], ['hanger', 'por soporte'], ['el90', 'por codo 90°'], ['el45', 'por codo 45°'], ['elbow', 'por codo (cualquiera)'], ['piece', 'por tramo/pieza'], ['drop', 'por drop/riser'], ['wall', 'por área de muro (largo × altura)'], ['vol', 'por volumen (yd³ / m³)'], ['perim', 'por perímetro del área']];
 const isMeasure = it => it.type === 'linear' || it.type === 'area' || it.type === 'count';
 
 /* ---------- Formatting ---------- */
@@ -395,38 +467,73 @@ function pushUndo() { S.undo.push(snapshot()); if (S.undo.length > 100) S.undo.s
 function restore(json) { const o = JSON.parse(json); S.items = o.items; S.pages = o.pages; S.conditions = o.conditions; S.selected = null; S.openCount = null; refresh(); }
 function undo() { if (!S.undo.length) return; S.redo.push(snapshot()); restore(S.undo.pop()); }
 function redo() { if (!S.redo.length) return; S.undo.push(snapshot()); restore(S.redo.pop()); }
-function projectData() { return { app: 'SmartTakeoff', version: 1, fileName: S.fileName, units: S.units, pages: S.pages, items: S.items, conditions: S.conditions }; }
+function projectData() { return { app: 'SmartTakeoff', version: 1, fileName: S.fileName, units: S.units, pages: S.pages, items: S.items, conditions: S.conditions, est: S.est, sheets: S.sheets.map(({ doc, page, name, auto, disc }) => ({ doc, page, name, auto, disc })) }; }
+function defaultEst() {
+  let co = {}; try { co = JSON.parse(localStorage.getItem('smarttakeoff:company') || '{}'); } catch (e) { }
+  return { rate: 95, tax: 8.25, oh: 10, profit: 10, company: co.company || '', contact: co.contact || '', client: '', project: '', address: '', bidDate: '', estimator: co.estimator || '',
+    inclusions: 'Materials and labor for the mechanical and plumbing scope shown on the drawings listed.\nHangers and supports.\nTesting of piping systems.',
+    exclusions: 'Permits and fees.\nElectrical power and controls wiring.\nCutting, patching and painting.\nOvertime and premium time.\nEngineering and test & balance unless noted.', bySystem: true };
+}
 let saveT;
 function autosave() {
   clearTimeout(saveT);
   saveT = setTimeout(() => { try { if (S.fileName) localStorage.setItem('smarttakeoff:' + S.fileName, JSON.stringify(projectData())); } catch (e) { } }, 300);
+  if (S.fileHandle) { S.dirty = true; renderSaveState(); clearTimeout(fileT); fileT = setTimeout(() => writeProjectFile(false), 4000); }
 }
+let fileT;
 function loadProjectData(o) {
   if (!o || !Array.isArray(o.items)) throw new Error('Archivo de proyecto no válido');
-  S.units = o.units || 'imperial'; S.pages = o.pages || {}; S.items = o.items; S.conditions = o.conditions || [];
+  S.units = o.units || 'imperial'; S.pages = o.pages || {}; S.items = o.items; S.conditions = o.conditions || []; S.est = Object.assign(defaultEst(), o.est || {}); S.sheets = Array.isArray(o.sheets) ? o.sheets : [];
+  S.conditions.forEach(c => { if (c.trade == null) c.trade = guessTrade(c); });
   S.activeCond = S.conditions[0] ? S.conditions[0].id : null;
   $('#unitsSel').value = S.units;
 }
 
 /* ---------- PDF loading & rendering ---------- */
-async function openPdf(file) {
+const sheetName = n => { const sh = S.sheets[n - 1]; return sh ? sh.name : String(n); };
+function buildSheets(doc, count) { return Array.from({ length: count }, (_, i) => ({ doc, page: i + 1, name: `${doc.replace(/\.pdf$/i, '')} p${i + 1}`, auto: true })); }
+// Look for a sheet number like M-101, P2.01 or H-3 in the title block (lower-right text wins)
+async function detectSheet(pdf, pageNo) {
+  try {
+    const page = await pdf.getPage(pageNo); const vp = page.getViewport({ scale: 1 }); const tc = await page.getTextContent();
+    const text = tc.items.map(i => i.str || '').join(' ').toUpperCase();
+    const re = /^[A-Z]{1,3}[-.]?\d{1,3}(\.\d{1,3})?[A-Z]?$/;
+    let best = null, score = -Infinity;
+    tc.items.forEach(it => {
+      const t = (it.str || '').trim(); if (!re.test(t)) return;
+      const sc = it.transform[4] / vp.width - it.transform[5] / vp.height + Math.abs(it.transform[0] || 0) / 40;
+      if (sc > score) { score = sc; best = t; }
+    });
+    return { name: best, disc: discFromName(best) || discFromText(text) || '' };
+  } catch (e) { return { name: null, disc: '' }; }
+}
+async function openPdf(file, append) {
   try {
     await workerReady;
     const buf = await file.arrayBuffer();
+    const bytes = buf.slice(0);
     const pdf = await pdfjs.getDocument({ data: buf }).promise;
-    S.pdf = pdf; S.numPages = pdf.numPages; S.pageNum = 1;
-    const sameProject = S.fileName === file.name && S.items.length;
-    S.fileName = file.name;
     let restored = false;
-    if (!sameProject) {
-      S.items = []; S.pages = {}; S.undo = []; S.redo = [];
-      try { const saved = localStorage.getItem('smarttakeoff:' + file.name); if (saved) { loadProjectData(JSON.parse(saved)); restored = true; } } catch (e) { }
-      if (!S.conditions.length) { S.conditions = presetConditions(); S.activeCond = S.conditions[0].id; }
+    if (!append) {
+      const sameProject = S.fileName === file.name && S.items.length;
+      S.fileName = file.name; S.pdfs = {}; S.pdfBytes = {}; S.fileHandle = null; renderSaveState();
+      if (!sameProject) {
+        S.items = []; S.pages = {}; S.undo = []; S.redo = []; S.sheets = [];
+        try { const saved = localStorage.getItem('smarttakeoff:' + file.name); if (saved) { loadProjectData(JSON.parse(saved)); restored = true; } } catch (e) { }
+        if (!S.conditions.length) { S.conditions = presetConditions(); S.activeCond = S.conditions[0].id; }
+      }
     }
+    if (!S.sheets.some(sh => sh.doc === file.name)) S.sheets.push(...buildSheets(file.name, pdf.numPages));
+    S.pdfs[file.name] = pdf; S.pdfBytes[file.name] = bytes; S.pdf = pdf; S.numPages = S.sheets.length;
+    // name sheets from their title blocks (only ones the user has not renamed)
+    for (const sh of S.sheets.filter(x => x.doc === file.name && (x.auto || x.disc == null))) { const r = await detectSheet(pdf, sh.page); if (sh.auto && r.name) sh.name = r.name; if (sh.disc == null) sh.disc = r.disc; }
     $('#empty').hidden = true; $('#stage').hidden = false;
-    document.title = file.name + ' · SmartTakeoff';
-    await gotoPage(1, true);
-    toast(restored ? 'Se restauró el takeoff guardado de este plano' : `${file.name} · ${S.numPages} página(s)`);
+    document.title = (S.fileName || file.name) + ' · SmartTakeoff';
+    const first = S.sheets.findIndex(sh => sh.doc === file.name) + 1;
+    await gotoPage(append ? first : 1, true);
+    const missing = [...new Set(S.sheets.map(x => x.doc))].filter(d => !S.pdfs[d]);
+    if (missing.length) toast(`Falta abrir: ${missing.join(', ')}. Usa “+ PDF”.`);
+    else toast(restored ? 'Se restauró el takeoff guardado de este plano' : `${file.name} · ${pdf.numPages} página(s)`);
   } catch (e) {
     console.error(e); toast('No se pudo abrir el PDF: ' + e.message);
   }
@@ -437,7 +544,9 @@ async function gotoPage(n, fit) {
   n = Math.max(1, Math.min(S.numPages, n));
   finishDraft(); S.openCount = null;
   S.pageNum = n; S.selected = null;
-  curPage = await S.pdf.getPage(n);
+  const sh = S.sheets[n - 1], doc = sh && S.pdfs[sh.doc];
+  if (!doc) { S.pageNum = n; curPage = null; const cv = $('#pdfCanvas'); cv.width = 1; cv.height = 1; toast(`Abre “${sh ? sh.doc : '?'}” con “+ PDF” para ver esta hoja`); refresh(); return; }
+  curPage = await doc.getPage(sh.page);
   const vp = curPage.getViewport({ scale: 1 });
   S.pageW = vp.width; S.pageH = vp.height;
   if (fit) fitZoom(); else await render();
@@ -449,6 +558,7 @@ function fitZoom() {
   render();
 }
 async function render() {
+  if (S.compare) endCompare();
   if (!curPage) return;
   const dpr = window.devicePixelRatio || 1;
   const cv = $('#pdfCanvas');
@@ -509,6 +619,7 @@ function drawOverlay() {
   const items = S.items.filter(it => it.page === S.pageNum);
   for (const it of items) {
     const c = condById(it.cond);
+    if (c && c.hidden) continue;
     const col = c ? c.color : '#e03131';
     const sel = S.selected === it.id;
     const sw = sel ? 4 : 2.5;
@@ -521,7 +632,8 @@ function drawOverlay() {
       const last = it.points[it.points.length - 1];
       h += `<text x="${last[0] + r}" y="${last[1] - r}" font-size="${fs}" fill="${col}">${esc(fmtQty(breakdown(it)))}</text></g>`;
     } else if (it.type === 'area') {
-      h += `<g data-id="${it.id}"><polygon points="${P}" fill="${col}" fill-opacity=".22" stroke="${col}" stroke-width="${sw}" ${dash} vector-effect="non-scaling-stroke"/>`;
+      const D = [it.points, ...(it.holes || [])].map(ring => 'M' + ring.map(q => q.join(',')).join('L') + 'Z').join(' ');
+      h += `<g data-id="${it.id}"><path d="${D}" fill-rule="evenodd" fill="${col}" fill-opacity=".22" stroke="${col}" stroke-width="${sw}" ${dash} vector-effect="non-scaling-stroke"/>`;
       const [cx, cy] = centroid(it.points);
       h += `<text x="${cx}" y="${cy}" font-size="${fs}" fill="${col}" text-anchor="middle">${esc(fmtQty(breakdown(it)))}</text></g>`;
     } else if (it.type === 'count') {
@@ -533,11 +645,30 @@ function drawOverlay() {
       h += '</g>';
     } else if (it.type === 'cloud') {
       h += `<g data-id="${it.id}"><path d="${cloudPath(it.points[0], it.points[1])}" fill="#e03131" fill-opacity=".04" stroke="#e03131" stroke-width="${sw}" ${dash} vector-effect="non-scaling-stroke"/></g>`;
+    } else if (it.type === 'arrow') {
+      const [a, b] = it.points, ang = Math.atan2(b[1] - a[1], b[0] - a[0]), L = 12 / z;
+      const h1 = [b[0] - L * Math.cos(ang - 0.4), b[1] - L * Math.sin(ang - 0.4)], h2 = [b[0] - L * Math.cos(ang + 0.4), b[1] - L * Math.sin(ang + 0.4)];
+      h += `<g data-id="${it.id}"><line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="transparent" stroke-width="14" vector-effect="non-scaling-stroke"/><line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#e03131" stroke-width="${sw}" ${dash} vector-effect="non-scaling-stroke"/><polygon points="${b.join(',')} ${h1.join(',')} ${h2.join(',')}" fill="#e03131"/></g>`;
+    } else if (it.type === 'callout') {
+      const [a, b] = it.points, f2 = fs * 1.1, tw = (it.text || '').length * f2 * 0.56 + f2, th = f2 * 1.7;
+      const bx = b[0] >= a[0] ? b[0] : b[0] - tw, by = b[1] - th / 2;
+      h += `<g data-id="${it.id}"><line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#e03131" stroke-width="2" vector-effect="non-scaling-stroke"/><circle cx="${a[0]}" cy="${a[1]}" r="${r * .45}" fill="#e03131"/>
+        <rect x="${bx}" y="${by}" width="${tw}" height="${th}" fill="#fff" stroke="#e03131" stroke-width="${sel ? 3 : 1.5}" vector-effect="non-scaling-stroke" rx="${2 / z}"/><text x="${bx + f2 / 2}" y="${by + th * 0.68}" font-size="${f2}" fill="#e03131" style="stroke:none">${esc(it.text)}</text></g>`;
+    } else if (it.type === 'highlight') {
+      const [a, b] = it.points;
+      h += `<g data-id="${it.id}"><rect x="${Math.min(a[0], b[0])}" y="${Math.min(a[1], b[1])}" width="${Math.abs(b[0] - a[0])}" height="${Math.abs(b[1] - a[1])}" fill="#fab005" fill-opacity=".35" stroke="${sel ? '#e67700' : 'none'}" stroke-width="2" vector-effect="non-scaling-stroke"/></g>`;
+    } else if (it.type === 'stamp') {
+      const [lbl, scol] = STAMPS[it.stamp] || STAMPS.reviewed, p = it.points[0], f2 = fs * 1.5, tw = lbl.length * f2 * 0.68 + f2, th = f2 * 2.6;
+      h += `<g data-id="${it.id}" transform="rotate(-8 ${p[0]} ${p[1]})"><rect x="${p[0] - tw / 2}" y="${p[1] - th / 2}" width="${tw}" height="${th}" fill="#fff" fill-opacity=".6" stroke="${scol}" stroke-width="${sel ? 4 : 2.5}" rx="${4 / z}" vector-effect="non-scaling-stroke"/>
+        <text x="${p[0]}" y="${p[1] - f2 * 0.05}" font-size="${f2}" font-weight="800" fill="${scol}" text-anchor="middle" style="stroke:none;letter-spacing:.06em">${esc(lbl)}</text><text x="${p[0]}" y="${p[1] + f2 * 0.85}" font-size="${f2 * 0.55}" fill="${scol}" text-anchor="middle" style="stroke:none">${esc(it.date || '')}</text></g>`;
+    } else if (it.type === 'photo') {
+      const p = it.points[0], q = 9 / z;
+      h += `<g data-id="${it.id}" style="cursor:pointer"><rect x="${p[0] - q}" y="${p[1] - q * .75}" width="${q * 2}" height="${q * 1.5}" rx="${q * .25}" fill="#1971c2" stroke="#fff" stroke-width="1.5" vector-effect="non-scaling-stroke"/><circle cx="${p[0]}" cy="${p[1]}" r="${q * .45}" fill="none" stroke="#fff" stroke-width="1.5" vector-effect="non-scaling-stroke"/></g>`;
     } else if (it.type === 'text') {
       const p = it.points[0];
       h += `<g data-id="${it.id}"><text x="${p[0]}" y="${p[1]}" font-size="${fs * 1.3}" fill="#e03131" font-weight="600" ${sel ? 'text-decoration="underline"' : ''}>${esc(it.text)}</text></g>`;
     }
-    if (sel && (it.type === 'linear' || it.type === 'area' || it.type === 'cloud')) {
+    if (sel && it.type !== 'count') {
       it.points.forEach((p, i) => h += `<rect data-handle="${i}" data-hid="${it.id}" x="${p[0] - r * .7}" y="${p[1] - r * .7}" width="${r * 1.4}" height="${r * 1.4}" fill="#fff" stroke="#000" stroke-width="1.5" vector-effect="non-scaling-stroke" style="cursor:move"/>`);
     }
   }
@@ -546,13 +677,22 @@ function drawOverlay() {
   if (d && S.cursor) {
     const pts = [...d.points, S.cursor];
     const c = condById(d.cond);
-    const col = d.type === 'calibrate' ? '#e03131' : d.type === 'cloud' ? '#e03131' : (c ? c.color : '#e03131');
+    const col = !['linear', 'area'].includes(d.type) ? '#e03131' : (c ? c.color : '#e03131');
     const P = pts.map(p => p.join(',')).join(' ');
-    if (d.type === 'area') h += `<polygon points="${P}" fill="${col}" fill-opacity=".15" stroke="${col}" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
+    if (d.type === 'area' || d.type === 'deduct') h += `<polygon points="${P}" fill="${col}" fill-opacity=".15" stroke="${col}" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
+    else if (d.type === 'symbol') { const [a, b] = pts; h += `<rect x="${Math.min(a[0], b[0])}" y="${Math.min(a[1], b[1])}" width="${Math.abs(b[0] - a[0])}" height="${Math.abs(b[1] - a[1])}" fill="#7048e8" fill-opacity=".08" stroke="#7048e8" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`; }
+    else if (d.type === 'highlight') { const [a, b] = pts; h += `<rect x="${Math.min(a[0], b[0])}" y="${Math.min(a[1], b[1])}" width="${Math.abs(b[0] - a[0])}" height="${Math.abs(b[1] - a[1])}" fill="#fab005" fill-opacity=".25" stroke="#e67700" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`; }
     else if (d.type === 'cloud') h += `<path d="${cloudPath(pts[0], pts[1])}" fill="none" stroke="${col}" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
     else h += `<polyline points="${P}" fill="none" stroke="${col}" stroke-width="2.5" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
     pts.forEach(p => h += `<circle cx="${p[0]}" cy="${p[1]}" r="${r * .5}" fill="${col}"/>`);
   }
+  if (S.snapHit && S.cursor && SNAP_TOOLS.includes(S.tool)) {
+    const [x, y] = S.snapHit.p, q = 5 / S.zoom;
+    h += S.snapHit.kind === 'corner' ? `<path d="M${x - q},${y}H${x + q}M${x},${y - q}V${y + q}" stroke="#12b886" stroke-width="2" vector-effect="non-scaling-stroke"/><circle cx="${x}" cy="${y}" r="${q}" fill="none" stroke="#12b886" stroke-width="2" vector-effect="non-scaling-stroke"/>`
+      : S.snapHit.kind === 'pt' ? `<rect x="${x - q}" y="${y - q}" width="${q * 2}" height="${q * 2}" fill="none" stroke="#12b886" stroke-width="2" vector-effect="non-scaling-stroke"/>`
+      : `<path d="M${x - q},${y - q}L${x + q},${y + q}M${x - q},${y + q}L${x + q},${y - q}" stroke="#12b886" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+  }
+  h += findOverlay();
   $('#overlay').innerHTML = h;
 }
 
@@ -562,16 +702,30 @@ const hints = {
   calibrate: 'Clic en los dos extremos de una cota conocida',
   linear: 'Clic para agregar puntos · doble clic o Enter para terminar · Shift = ortogonal · Esc cancela',
   area: 'Clic en cada vértice · doble clic o Enter para cerrar · Shift = ortogonal · Esc cancela',
+  deduct: 'Dibuja el hueco dentro de un área: clic en cada vértice, doble clic o Enter para restarlo',
   count: 'Clic en cada elemento para contarlo · Enter o Esc para terminar el grupo',
   cloud: 'Clic en dos esquinas opuestas',
-  text: 'Clic donde quieres la nota'
+  text: 'Clic donde quieres la nota',
+  arrow: 'Clic en el inicio y luego en la punta de la flecha',
+  callout: 'Clic en el punto a señalar y luego donde va el texto',
+  highlight: 'Clic en dos esquinas opuestas del área a resaltar',
+  stamp: 'Clic donde va el sello',
+  photo: 'Clic donde va la foto y elige la imagen',
+  symbol: 'Dibuja un recuadro alrededor de un símbolo (clic en dos esquinas) para encontrar todos los iguales'
 };
+const TOOL_LABEL = { select: 'Seleccionar', calibrate: 'Calibrar', linear: 'Lineal', area: 'Área', count: 'Conteo', deduct: 'Deducir', cloud: 'Nube', text: 'Texto', arrow: 'Flecha', callout: 'Callout', highlight: 'Resaltar', stamp: 'Sello', photo: 'Foto', symbol: 'Buscar símbolo' };
+const ANNO_TOOLS = ['cloud', 'text', 'arrow', 'callout', 'highlight', 'stamp', 'photo'];
+const STAMPS = { approved: ['APPROVED', '#2b8a3e'], reviewed: ['REVIEWED', '#1971c2'], revise: ['REVISE & RESUBMIT', '#e8590c'], rejected: ['REJECTED', '#c92a2a'], field: ['FIELD VERIFY', '#5f3dc4'], nic: ['NOT IN CONTRACT', '#495057'] };
+function toolStatus() {
+  const t = S.tool, c = condById(S.activeCond);
+  $('#stTool').innerHTML = 'Herramienta: <b>' + esc(TOOL_LABEL[t] || t) + '</b>' + (['linear', 'area', 'count'].includes(t) && c ? ' · ' + esc(c.name) : '');
+}
 function setTool(t) {
   finishDraft(); S.openCount = null;
   if (['linear', 'area', 'count'].includes(t)) {
     const c = condById(S.activeCond);
     if (!c || c.type !== t) {
-      const m = S.conditions.find(x => x.type === t);
+      const m = visibleConds().find(x => x.type === t) || S.conditions.find(x => x.type === t);
       if (m) S.activeCond = m.id;
       else { editCondition(null, t); return; }
     }
@@ -579,16 +733,60 @@ function setTool(t) {
   S.tool = t;
   document.querySelectorAll('.tool').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
   $('#overlay').style.cursor = t === 'select' ? 'grab' : 'crosshair';
-  $('#stTool').innerHTML = 'Herramienta: <b>' + esc($(`.tool[data-tool="${t}"]`).firstChild.textContent) + '</b>' + (['linear', 'area', 'count'].includes(t) ? ' · ' + esc(condById(S.activeCond).name) : '');
+  $('#annoSel').value = ANNO_TOOLS.includes(t) ? t : '';
+  toolStatus();
   $('#stHint').textContent = hints[t] || '';
   renderConditions();
   drawOverlay();
 }
 document.querySelectorAll('.tool').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+$('#annoSel').addEventListener('change', e => { if (!S.pdf) { e.target.value = ''; return; } setTool(e.target.value || 'select'); e.target.blur(); });
 
 function evtPt(e) {
   const r = $('#overlay').getBoundingClientRect();
   return [(e.clientX - r.left) / S.zoom, (e.clientY - r.top) / S.zoom];
+}
+const SNAP_TOOLS = ['calibrate', 'linear', 'area', 'deduct', 'cloud', 'arrow', 'callout', 'highlight'];
+function toggleSnap() { S.snap = !S.snap; $('#btnSnap').classList.toggle('on', S.snap); toast(S.snap ? 'Snap activado' : 'Snap desactivado'); }
+// Snap to vertices of existing takeoffs first, then to the nearest dark line on the rendered drawing
+function snapPt(p) {
+  S.snapHit = null;
+  if (!S.snap || !SNAP_TOOLS.includes(S.tool)) return p;
+  const tol = 9 / S.zoom; let best = null, bd = tol;
+  S.items.forEach(it => { if (it.page !== S.pageNum) return; [...it.points, ...(it.holes || []).flat()].forEach(q => { const dd = dist(p, q); if (dd < bd) { bd = dd; best = q; } }); });
+  if (S.draft) S.draft.points.slice(0, -1).forEach(q => { const dd = dist(p, q); if (dd < bd) { bd = dd; best = q; } });
+  if (best) { S.snapHit = { p: best, kind: 'pt' }; return [best[0], best[1]]; }
+  const cv = $('#pdfCanvas'); if (!cv.width || !S.pageW) return p;
+  const k = cv.width / S.pageW, cx = Math.round(p[0] * k), cy = Math.round(p[1] * k), R = Math.max(4, Math.round(7 * k / S.zoom));
+  const x0 = Math.max(0, cx - R), y0 = Math.max(0, cy - R), w = Math.min(cv.width, cx + R + 1) - x0, h = Math.min(cv.height, cy + R + 1) - y0;
+  if (w <= 0 || h <= 0) return p;
+  let data; try { data = cv.getContext('2d', { willReadFrequently: true }).getImageData(x0, y0, w, h).data; } catch (e) { return p; }
+  const dark = (x, y) => { const i = (y * w + x) * 4; return data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11 < 120; };
+  // straight lines through the window: rows/columns that are mostly dark
+  const lineAt = (horiz) => {
+    const n = horiz ? h : w, len = horiz ? w : h, hits = [];
+    for (let i = 0; i < n; i++) { let c = 0; for (let j = 0; j < len; j++) if (horiz ? dark(j, i) : dark(i, j)) c++; if (c >= len * 0.4) hits.push(i); }
+    if (!hits.length) return null;
+    const c0 = horiz ? cy - y0 : cx - x0; let best = hits[0];
+    hits.forEach(i => { if (Math.abs(i - c0) < Math.abs(best - c0)) best = i; });
+    const grp = hits.filter(i => Math.abs(i - best) <= Math.max(2, k * 1.5));      // the stroke's full thickness
+    return grp.reduce((a, b) => a + b, 0) / grp.length + (horiz ? y0 : x0);
+  };
+  const hy = lineAt(true), vx = lineAt(false);
+  let q, kind = 'line';
+  if (hy != null && vx != null) { q = [vx / k, hy / k]; kind = 'corner'; }
+  else if (hy != null) q = [p[0], hy / k];
+  else if (vx != null) q = [vx / k, p[1]];
+  else {
+    let nx = -1, ny = -1, nd = Infinity;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { if (!dark(x, y)) continue; const dd = (x + x0 - cx) ** 2 + (y + y0 - cy) ** 2; if (dd < nd) { nd = dd; nx = x; ny = y; } }
+    if (nx < 0 || nd > R * R) return p;
+    let sx = 0, sy = 0, n = 0; const r2 = Math.max(2, Math.round(k * 1.2));
+    for (let y = Math.max(0, ny - r2); y <= Math.min(h - 1, ny + r2); y++) for (let x = Math.max(0, nx - r2); x <= Math.min(w - 1, nx + r2); x++) if (dark(x, y)) { sx += x; sy += y; n++; }
+    q = [(x0 + sx / n) / k, (y0 + sy / n) / k];
+  }
+  S.snapHit = { p: q, kind };
+  return q;
 }
 function ortho(p, prev) {
   const dx = p[0] - prev[0], dy = p[1] - prev[1];
@@ -629,26 +827,32 @@ window.addEventListener('mousemove', e => {
   }
   if (!S.pdf || e.target.closest('#overlay') == null && !S.draft) return;
   let p = evtPt(e);
-  if (S.draft && S.draft.points.length && e.shiftKey && S.draft.type !== 'cloud') p = ortho(p, S.draft.points[S.draft.points.length - 1]);
+  if (S.draft && S.draft.points.length && e.shiftKey && S.draft.type !== 'cloud') { p = ortho(p, S.draft.points[S.draft.points.length - 1]); S.snapHit = null; }
+  else p = snapPt(p);
   S.cursor = p;
-  if (S.draft) { drawOverlay(); liveReadout(); }
+  if (S.draft || S.snapHit || S.hadSnap) { drawOverlay(); liveReadout(); }
+  S.hadSnap = !!S.snapHit;
 });
 window.addEventListener('mouseup', () => {
   if (pan) { if (!pan.moved && S.tool === 'select') select(null); pan = null; ov.style.cursor = S.tool === 'select' ? 'grab' : 'crosshair'; }
   if (drag) { drag = null; refresh(); }
 });
 ov.addEventListener('click', e => {
+  const fd = e.target.closest && e.target.closest('[data-found]');
+  if (fd && S.find && !S.draft) { const a = S.find.pts[S.pageNum]; a.splice(+fd.dataset.found, 1); if (!a.length) delete S.find.pts[S.pageNum]; showFindBar(); drawOverlay(); return; }
   if (!S.pdf || S.tool === 'select' || e.button !== 0 || spaceDown) return;
-  let p = evtPt(e);
+  let p = (S.snapHit && S.cursor) ? S.cursor : evtPt(e);
   const t = S.tool;
-  if (e.detail >= 2) { if (t === 'linear' || t === 'area') finishDraft(); return; }
+  if (e.detail >= 2) { if (t === 'linear' || t === 'area' || t === 'deduct') finishDraft(); return; }
   if (t === 'count') { addCount(p); return; }
   if (t === 'text') { addText(p); return; }
+  if (t === 'stamp') { addStamp(p); return; }
+  if (t === 'photo') { S.photoAt = p; $('#filePhoto').click(); return; }
   if (!S.draft) S.draft = { type: t, cond: S.activeCond, points: [] };
   const d = S.draft;
   if (d.points.length && e.shiftKey && t !== 'cloud') p = ortho(p, d.points[d.points.length - 1]);
   d.points.push(p);
-  if ((t === 'calibrate' || t === 'cloud') && d.points.length === 2) finishDraft();
+  if (['calibrate', 'cloud', 'arrow', 'highlight', 'callout', 'symbol'].includes(t) && d.points.length === 2) finishDraft();
   drawOverlay();
 });
 ov.addEventListener('mouseleave', () => { S.cursor = null; drawOverlay(); });
@@ -669,7 +873,7 @@ function liveReadout() {
   if (d.type === 'linear' || d.type === 'calibrate') {
     const L = polyLen(pts);
     txt = k ? 'Longitud: ' + fmtLen(L * k) : `Longitud: ${nf(L, 1)} pt (sin escala)`;
-  } else if (d.type === 'area' && pts.length > 2) {
+  } else if ((d.type === 'area' || d.type === 'deduct') && pts.length > 2) {
     const A = polyArea(pts);
     txt = k ? `Área: ${nf(A * k * k)} ${U().area}` : `Área: ${nf(A, 0)} pt² (sin escala)`;
   }
@@ -680,11 +884,23 @@ function finishDraft() {
   const d = S.draft; S.draft = null; $('#stLive').textContent = '';
   if (!d) return;
   if (d.type === 'calibrate') { if (d.points.length === 2) calibrateDialog(dist(d.points[0], d.points[1])); return; }
-  const min = d.type === 'area' ? 3 : 2;
+  if (d.type === 'symbol') { if (d.points.length === 2) { S.find = null; symbolSearch(d.points, 'page'); } drawOverlay(); return; }
+  const min = d.type === 'area' || d.type === 'deduct' ? 3 : 2;
   if (d.points.length < min) { drawOverlay(); return; }
+  if (d.type === 'deduct') {
+    const c0 = centroid(d.points);
+    const host = S.items.filter(x => x.page === S.pageNum && x.type === 'area').reverse().find(x => inPoly(c0, x.points));
+    if (!host) { toast('Dibuja la deducción dentro de un área medida'); drawOverlay(); return; }
+    pushUndo(); (host.holes || (host.holes = [])).push(d.points); toast('Deducción restada del área'); refresh(); return;
+  }
   pushUndo();
   const it = { id: newId('m'), page: S.pageNum, type: d.type, points: d.points };
-  if (d.type !== 'cloud') it.cond = d.cond;
+  if (d.type === 'linear' || d.type === 'area') it.cond = d.cond;
+  if (d.type === 'callout') {
+    modal(`<h3>Callout</h3><div class="form"><label>Texto</label><input type="text" id="mText" autofocus></div>`, [{ t: 'Cancelar', f: () => drawOverlay() },
+      { t: 'Agregar', primary: true, f: () => { const v = $('#mText').value.trim(); if (!v) return false; it.text = v; pushUndo(); S.items.push(it); refresh(); } }]);
+    return;
+  }
   S.items.push(it);
   if (isMeasure(it) && !cal(S.pageNum)) toast('Medición guardada. Calibra la escala para ver la cantidad real.');
   refresh();
@@ -699,6 +915,30 @@ function addCount(p) {
   it.points.push(p);
   refresh();
 }
+function addStamp(p) {
+  modal(`<h3>Sello</h3><div class="form"><label>Tipo</label><select id="mStamp">${Object.entries(STAMPS).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join('')}</select></div>`, [
+    { t: 'Cancelar' },
+    { t: 'Agregar', primary: true, f: () => { pushUndo(); S.items.push({ id: newId('m'), page: S.pageNum, type: 'stamp', points: [p], stamp: $('#mStamp').value, date: new Date().toLocaleDateString('en-US') }); refresh(); } }
+  ]);
+}
+$('#filePhoto').addEventListener('change', e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f || !S.photoAt) return;
+  const img = new Image(); const url = URL.createObjectURL(f);
+  img.onload = () => {
+    const k = Math.min(1, 1280 / Math.max(img.width, img.height)); const c = document.createElement('canvas');
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    pushUndo(); S.items.push({ id: newId('m'), page: S.pageNum, type: 'photo', points: [S.photoAt], img: c.toDataURL('image/jpeg', 0.82), name: f.name });
+    URL.revokeObjectURL(url); refresh(); toast('Foto agregada. Doble clic en el ícono para verla.');
+  };
+  img.onerror = () => toast('No se pudo leer la imagen');
+  img.src = url;
+});
+ov.addEventListener('dblclick', e => {
+  const g = e.target.closest('[data-id]'); if (!g) return;
+  const it = S.items.find(x => x.id === g.dataset.id); if (!it) return;
+  if (it.type === 'photo') modal(`<h3>${esc(it.name || 'Foto')}</h3><img src="${it.img}" style="max-width:100%;border-radius:6px">`, [{ t: 'Cerrar', primary: true }]);
+  if ((it.type === 'text' || it.type === 'callout') && S.tool === 'select') modal(`<h3>${it.type === 'callout' ? 'Callout' : 'Nota de texto'}</h3><div class="form"><label>Texto</label><input type="text" id="mText" value="${esc(it.text)}" autofocus></div>`, [{ t: 'Cancelar' }, { t: 'Guardar', primary: true, f: () => { const v = $('#mText').value.trim(); if (v) { pushUndo(); it.text = v; refresh(); } } }]);
+});
 function addText(p) {
   modal(`<h3>Nota de texto</h3><div class="form"><label>Texto</label><input type="text" id="mText" autofocus></div>`, [
     { t: 'Cancelar' },
@@ -746,7 +986,7 @@ window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }
-  if ((e.ctrlKey || e.metaKey) && k === 's') { e.preventDefault(); saveProject(); return; }
+  if ((e.ctrlKey || e.metaKey) && k === 's') { e.preventDefault(); saveProject(e.shiftKey); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === ' ') { spaceDown = true; ov.style.cursor = 'grab'; e.preventDefault(); return; }
   if (e.key === 'Escape') { S.draft = null; S.openCount = null; $('#stLive').textContent = ''; if (S.tool !== 'select') setTool('select'); else select(null); return; }
@@ -756,7 +996,8 @@ window.addEventListener('keydown', e => {
   if (e.key === 'PageUp') { gotoPage(S.pageNum - 1); return; }
   if (e.key === '+' || e.key === '=') { setZoom(S.zoom * 1.25); return; }
   if (e.key === '-') { setZoom(S.zoom / 1.25); return; }
-  const map = { v: 'select', k: 'calibrate', l: 'linear', a: 'area', c: 'count', r: 'cloud', t: 'text' };
+  if (k === 's' && S.pdf) { toggleSnap(); return; }
+  const map = { b: 'symbol', v: 'select', k: 'calibrate', l: 'linear', a: 'area', c: 'count', r: 'cloud', t: 'text', d: 'deduct', w: 'arrow', q: 'callout', h: 'highlight', m: 'stamp', f: 'photo' };
   if (map[k] && S.pdf) setTool(map[k]);
 });
 window.addEventListener('keyup', e => { if (e.key === ' ') { spaceDown = false; ov.style.cursor = S.tool === 'select' ? 'grab' : 'crosshair'; } });
@@ -768,20 +1009,32 @@ function condTotals() {
   return t;
 }
 function renderConditions() {
+  renderTradeSel();
   const t = condTotals();
-  $('#condList').innerHTML = S.conditions.map(c => {
+  const list = visibleConds();
+  if (list.length && !list.some(c => c.id === S.activeCond)) { const m = list.find(c => c.type === S.tool) || list[0]; S.activeCond = m.id; S.openCount = null; toolStatus(); }
+  const order = c => { const i = TRADES.findIndex(x => x.id === c.trade); return i < 0 ? 99 : i; };
+  const sorted = list.map((c, i) => [c, i]).sort((a, b) => order(a[0]) - order(b[0]) || a[1] - b[1]).map(x => x[0]);
+  const multi = new Set(sorted.map(c => c.trade || '')).size > 1;
+  let last = null;
+  $('#condList').innerHTML = sorted.map(c => {
     const q = t[c.id] || 0;
     const qs = c.type === 'count' ? q + ' pza' : c.type === 'linear' ? fmtLen(q) : nf(q) + ' ' + U().area;
-    return `<div class="cond ${c.id === S.activeCond ? 'active' : ''}" data-cid="${c.id}">
+    const hd = multi && (c.trade || '') !== last ? `<div class="trh">${esc(tradeName(c.trade) || 'Otras')}</div>` : '';
+    last = c.trade || '';
+    return hd + `<div class="cond ${c.id === S.activeCond ? 'active' : ''} ${c.hidden ? 'hid' : ''}" data-cid="${c.id}">
       <span class="sw" style="background:${esc(c.color)}"></span>
       <span class="nm"><b>${esc(c.name)}</b><small>${typeName[c.type]}${c.system ? ' · ' + esc(c.system) : ''}</small></span>
       <span class="q">${q ? esc(qs) : ''}</span>
+      <button class="eye ${c.hidden ? 'off' : ''}" data-eye="${c.id}" title="${c.hidden ? 'Mostrar en el plano' : 'Ocultar en el plano'}">${c.hidden ? '○' : '●'}</button>
       <button class="ed" data-edit="${c.id}" title="Editar">✎</button></div>`;
   }).join('') || '<p style="padding:8px;color:var(--muted)">Sin condiciones. Crea una con “+ Nueva”.</p>';
 }
 $('#condList').addEventListener('click', e => {
   const ed = e.target.closest('[data-edit]');
   if (ed) { editCondition(ed.dataset.edit); return; }
+  const eye = e.target.closest('[data-eye]');
+  if (eye) { const c = condById(eye.dataset.eye); c.hidden = !c.hidden; refresh(); return; }
   const row = e.target.closest('[data-cid]');
   if (!row) return;
   const c = condById(row.dataset.cid);
@@ -793,6 +1046,7 @@ $('#btnNewCond').addEventListener('click', () => editCondition(null));
 function editCondition(id, forceType) {
   const isNew = !id;
   const c = isNew ? { id: newId('c'), name: '', type: forceType || 'linear', color: '#d9480f', system: '', material: '', size: '', shape: 'none', w: 0, h: 0, d: 0, gauge: 'auto', piece: 0, hanger: 0, waste: 0, price: 0 } : { ...condById(id) };
+  if (isNew) Object.assign(c, { trade: S.tradeFilter && !['auto', 'all'].includes(S.tradeFilter) ? S.tradeFilter : ((activeTrades() || [])[0] || ''), ht: 0, th: 0, tags: [] });
   const u = U();
   const used = !isNew && S.items.some(i => i.cond === id);
   modal(`<h3>${isNew ? 'Nueva condición' : 'Editar condición'}</h3>
@@ -800,6 +1054,7 @@ function editCondition(id, forceType) {
   <div class="form">
     <label>Nombre</label><input type="text" id="fName" value="${esc(c.name)}" placeholder="Ej.: Ducto 18x10 suministro" autofocus>
     <label>Tipo</label><select id="fType" ${used ? 'disabled' : ''}><option value="linear">Lineal</option><option value="area">Área</option><option value="count">Conteo</option></select>
+    <label>Oficio</label><select id="fTrade"><option value="">(sin oficio)</option>${TRADES.map(t => `<option value="${t.id}">${esc(t.es)}</option>`).join('')}</select>
     <label>Color</label><input type="color" id="fColor" value="${esc(c.color)}" style="height:30px;padding:2px">
     <label>Sistema</label><input type="text" id="fSystem" value="${esc(c.system)}" placeholder="HVAC suministro, Agua fría…">
     <label>Material</label><input type="text" id="fMat" value="${esc(c.material)}" placeholder="Lámina galv. cal. 24, Cobre tipo L…">
@@ -811,12 +1066,19 @@ function editCondition(id, forceType) {
     <label class="lin">Largo de pieza (${u.len})</label><input class="lin" type="number" id="fPiece" value="${c.piece}" step="any">
     <div class="hint lin">Tramo comercial: ducto 5 ft / 1.5 m, tubería 20–21 ft / 6 m. Deja 0 para no calcular piezas.</div>
     <label class="lin">Soporte cada (${u.len})</label><input class="lin" type="number" id="fHanger" value="${c.hanger}" step="any">
+    <label class="lin">Altura de muro (${u.len})</label><input class="lin" type="number" id="fHt" value="${+c.ht || 0}" step="any">
+    <label class="thk">Espesor (${u.size})</label><input class="thk" type="number" id="fTh" value="${+c.th || 0}" step="any">
+    <div class="hint thk">Con altura, el largo × altura da el área de muro. Con espesor, sale el volumen de concreto.</div>
+    <label class="cnt">Etiquetas en plano</label><input class="cnt" type="text" id="fTags" value="${esc((c.tags || []).join(', '))}" placeholder="VAV, RTU, WC… (separadas por coma)">
+    <div class="hint cnt">Etiquetas de texto que “Detectar” convierte en conteos de esta condición.</div>
     <label>Desperdicio (%)</label><input type="number" id="fWaste" value="${c.waste}" step="any">
     <label>Precio unitario</label><input type="number" id="fPrice" value="${c.price}" step="any">
     <div class="hint">Precio por ${c.type === 'count' ? 'pieza' : c.type === 'area' ? u.area : u.len}, se multiplica por la cantidad con desperdicio.</div>
+    <label>Mano de obra (h por unidad)</label><input type="number" id="fLabor" value="${+c.labor || 0}" step="any">
   </div>
   <h4 style="margin:16px 0 4px">Ensamble: materiales que salen de esta condición</h4>
   <div class="hint" style="color:var(--muted);font-size:12px;margin-bottom:6px">Cada material se calcula con un factor. Ejemplo: 2 colgadores por soporte, o 1 codo por cada codo 90°.</div>
+  <div class="asmRow asmHdr"><span>Material</span><span>Factor</span><span>Por</span><span>Unidad</span><span>Precio</span><span>h/u</span><span></span></div>
   <div id="asmRows"></div>
   <button id="asmAdd" type="button" style="margin-top:6px">+ Agregar material</button>`, [
     ...(isNew ? [] : [{ t: 'Eliminar', danger: true, f: () => {
@@ -831,7 +1093,7 @@ function editCondition(id, forceType) {
       const name = $('#fName').value.trim();
       if (!name) { toast('Ponle un nombre a la condición'); return false; }
       pushUndo();
-      Object.assign(c, { name, type: $('#fType').value, color: $('#fColor').value, system: $('#fSystem').value.trim(), material: $('#fMat').value.trim(), size: $('#fSize').value.trim(), shape: $('#fShape').value, w: +$('#fW').value || 0, h: +$('#fH').value || 0, d: +$('#fD').value || 0, gauge: $('#fGauge').value, asm: readAsm(), piece: +$('#fPiece').value || 0, hanger: +$('#fHanger').value || 0, waste: +$('#fWaste').value || 0, price: +$('#fPrice').value || 0 });
+      Object.assign(c, { name, type: $('#fType').value, color: $('#fColor').value, system: $('#fSystem').value.trim(), material: $('#fMat').value.trim(), size: $('#fSize').value.trim(), shape: $('#fShape').value, w: +$('#fW').value || 0, h: +$('#fH').value || 0, d: +$('#fD').value || 0, gauge: $('#fGauge').value, asm: readAsm(), piece: +$('#fPiece').value || 0, hanger: +$('#fHanger').value || 0, waste: +$('#fWaste').value || 0, price: +$('#fPrice').value || 0, labor: +$('#fLabor').value || 0, trade: $('#fTrade').value, ht: +$('#fHt').value || 0, th: +$('#fTh').value || 0, tags: $('#fTags').value.split(',').map(x => x.trim().toUpperCase()).filter(Boolean) });
       if (c.type !== 'linear') c.shape = 'none';
       if (isNew) S.conditions.push(c); else S.conditions[S.conditions.findIndex(x => x.id === id)] = c;
       S.activeCond = c.id;
@@ -839,30 +1101,33 @@ function editCondition(id, forceType) {
       if (forceType && S.pdf) setTool(forceType);
     } }
   ]);
-  $('#fType').value = c.type; $('#fShape').value = c.shape; $('#fGauge').value = String(c.gauge || 'auto');
+  $('#fType').value = c.type; $('#fTrade').value = c.trade || ''; $('#fShape').value = c.shape; $('#fGauge').value = String(c.gauge || 'auto');
   const sync = () => {
     const lin = $('#fType').value === 'linear', sh = $('#fShape').value;
     document.querySelectorAll('#modal .lin').forEach(e => e.style.display = lin ? '' : 'none');
     document.querySelectorAll('#modal .rect').forEach(e => e.style.display = lin && sh === 'rect' ? '' : 'none');
     document.querySelectorAll('#modal .duct').forEach(e => e.style.display = lin && sh !== 'none' ? '' : 'none');
+    const ty = $('#fType').value;
+    document.querySelectorAll('#modal .thk').forEach(e => e.style.display = ty !== 'count' ? '' : 'none');
+    document.querySelectorAll('#modal .cnt').forEach(e => e.style.display = ty === 'count' ? '' : 'none');
     document.querySelectorAll('#modal .round').forEach(e => e.style.display = lin && sh === 'round' ? '' : 'none');
   };
   $('#fType').addEventListener('change', sync); $('#fShape').addEventListener('change', sync); sync();
   $('#modal').style.maxWidth = '760px';
   (c.asm || []).forEach(addAsmRow);
-  $('#asmAdd').addEventListener('click', () => addAsmRow({ name: '', f: 1, base: 'qty', unit: 'EA', price: 0 }));
+  $('#asmAdd').addEventListener('click', () => addAsmRow({ name: '', f: 1, base: 'qty', unit: 'EA', price: 0, lab: 0 }));
 }
 function addAsmRow(a) {
   const row = document.createElement('div');
   row.className = 'asmRow';
   row.innerHTML = `<input type="text" class="aName" placeholder="Material" value="${esc(a.name)}"><input type="number" class="aF" step="any" value="${+a.f || 0}" title="Factor">
     <select class="aBase" title="Por">${ASM_BASES.map(([v, l]) => `<option value="${v}" ${v === a.base ? 'selected' : ''}>${l}</option>`).join('')}</select>
-    <input type="text" class="aUnit" value="${esc(a.unit)}" title="Unidad"><input type="number" class="aPrice" step="any" value="${+a.price || 0}" title="Precio unit."><button type="button" class="aDel" title="Quitar">✕</button>`;
+    <input type="text" class="aUnit" value="${esc(a.unit)}" title="Unidad"><input type="number" class="aPrice" step="any" value="${+a.price || 0}" title="Precio unit."><input type="number" class="aLab" step="any" value="${+a.lab || 0}" title="Horas de mano de obra por unidad"><button type="button" class="aDel" title="Quitar">✕</button>`;
   row.querySelector('.aDel').addEventListener('click', () => row.remove());
   $('#asmRows').appendChild(row);
 }
 function readAsm() {
-  return [...document.querySelectorAll('#asmRows .asmRow')].map(r => ({ name: r.querySelector('.aName').value.trim(), f: +r.querySelector('.aF').value || 0, base: r.querySelector('.aBase').value, unit: r.querySelector('.aUnit').value.trim() || 'EA', price: +r.querySelector('.aPrice').value || 0 })).filter(a => a.name);
+  return [...document.querySelectorAll('#asmRows .asmRow')].map(r => ({ name: r.querySelector('.aName').value.trim(), f: +r.querySelector('.aF').value || 0, base: r.querySelector('.aBase').value, unit: r.querySelector('.aUnit').value.trim() || 'EA', price: +r.querySelector('.aPrice').value || 0, lab: +r.querySelector('.aLab').value || 0 })).filter(a => a.name);
 }
 let confirmDelete = false;
 
@@ -878,9 +1143,9 @@ function summaryRows() {
   S.items.filter(isMeasure).forEach(it => {
     const c = condById(it.cond); if (!c) return;
     const b = breakdown(it);
-    const r = g[c.id] || (g[c.id] = { c, q: 0, qw: 0, pieces: 0, sheet: 0, weight: 0, hangers: 0, el90: 0, el45: 0, cost: 0, n: 0, nocal: 0 });
+    const r = g[c.id] || (g[c.id] = { c, q: 0, qw: 0, pieces: 0, sheet: 0, weight: 0, hangers: 0, el90: 0, el45: 0, cost: 0, hours: 0, n: 0, nocal: 0 });
     r.n++; if (!b.ok) { r.nocal++; return; }
-    r.q += b.q; r.qw += b.qw; r.pieces += +b.pieces || 0; r.sheet += +b.sheet || 0; r.weight += +b.weight || 0; r.hangers += +b.hangers || 0; r.el90 += b.el90; r.el45 += b.el45; r.cost += b.cost;
+    r.q += b.q; r.qw += b.qw; r.pieces += +b.pieces || 0; r.sheet += +b.sheet || 0; r.weight += +b.weight || 0; r.hangers += +b.hangers || 0; r.el90 += b.el90; r.el45 += b.el45; r.cost += b.cost; r.hours += b.hours;
   });
   // recompute pieces from the total (cutting from shared stock) instead of summing per run
   Object.values(g).forEach(r => { if (r.c.type === 'linear' && +r.c.piece > 0) r.pieces = Math.ceil(r.qw / r.c.piece - 1e-9); });
@@ -889,17 +1154,32 @@ function summaryRows() {
 // Bill of materials: every condition's own material plus its assembly materials, merged by name + unit
 function bomRows() {
   const m = new Map();
-  const add = (name, unit, q, price, cost, from) => {
-    const k = name + '|' + unit; const r = m.get(k) || { name, unit, q: 0, price, cost: 0, from: new Set() };
-    r.q += q; r.cost += cost; if (price) r.price = price; r.from.add(from); m.set(k, r);
+  const add = (name, unit, q, price, cost, from, hrs) => {
+    const k = name + '|' + unit; const r = m.get(k) || { name, unit, q: 0, price, cost: 0, hrs: 0, from: new Set() };
+    r.q += q; r.cost += cost; r.hrs += hrs || 0; if (price) r.price = price; r.from.add(from); m.set(k, r);
   };
   S.items.filter(isMeasure).forEach(it => {
     const c = condById(it.cond); if (!c) return; const b = breakdown(it); if (!b.ok) return;
-    add(c.name, b.unit, b.qw, +c.price || 0, b.mainCost, c.name);
-    b.asm.forEach(a => add(a.name, a.unit, a.q, a.price, a.cost, c.name));
+    add(c.name, b.unit, b.qw, +c.price || 0, b.mainCost, c.name, b.mainHours);
+    b.asm.forEach(a => add(a.name, a.unit, a.q, a.price, a.cost, c.name, a.hours));
   });
   return [...m.values()].map(r => { const whole = /^(EA|pza)$/i.test(r.unit); const q = whole ? Math.ceil(r.q - 1e-9) : r.q; return { ...r, q, cost: r.price ? q * r.price : r.cost, whole, from: [...r.from].join(', ') }; });
 }
+function estimate() {
+  const e = S.est, sys = new Map();
+  let mat = 0, hrs = 0;
+  S.items.filter(isMeasure).forEach(it => {
+    const c = condById(it.cond); if (!c) return; const b = breakdown(it); if (!b.ok) return;
+    mat += b.cost; hrs += b.hours;
+    const k = c.system || '—'; const r = sys.get(k) || { name: k, mat: 0, hrs: 0 }; r.mat += b.cost; r.hrs += b.hours; sys.set(k, r);
+  });
+  const tax = mat * (+e.tax || 0) / 100, labor = hrs * (+e.rate || 0), direct = mat + tax + labor;
+  const oh = direct * (+e.oh || 0) / 100, profit = (direct + oh) * (+e.profit || 0) / 100, total = direct + oh + profit;
+  const k = direct ? total / direct : 0;
+  const systems = [...sys.values()].map(r => { const d = r.mat * (1 + (+e.tax || 0) / 100) + r.hrs * (+e.rate || 0); return { ...r, labor: r.hrs * (+e.rate || 0), direct: d, total: d * k }; });
+  return { mat, tax, hrs, labor, direct, oh, profit, total, systems };
+}
+const money = v => '$' + nf(v || 0);
 function unitOf(c) { return c.type === 'count' ? 'pza' : c.type === 'area' ? U().area : U().len; }
 function renderTable() {
   const w = $('#tableWrap');
@@ -907,8 +1187,8 @@ function renderTable() {
     const rows = detailRows();
     if (!rows.length) { w.innerHTML = `<p style="padding:12px;color:var(--muted)">Aún no hay mediciones. Elige una condición a la izquierda y mide sobre el plano.</p>`; return; }
     const opts = (it) => S.conditions.filter(c => c.type === it.type).map(c => `<option value="${c.id}" ${c.id === it.cond ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
-    w.innerHTML = `<table><thead><tr><th>#</th><th>Pág.</th><th>Condición</th><th>Tipo</th><th class="n">Cantidad</th><th class="n">C/desperdicio</th><th class="n">Piezas</th><th class="n">Lámina (${U().area})</th><th class="n">Cal.</th><th class="n">Peso (${U().wt})</th><th class="n">Soportes</th><th class="n">Codos 90°</th><th class="n">Codos 45°</th><th class="n">Vertical (${U().len})</th><th class="n">Drops</th><th class="n">Costo</th><th></th></tr></thead><tbody>${rows.map(({ it, c, b, i }) => `
-      <tr data-id="${it.id}" class="${S.selected === it.id ? 'sel' : ''}"><td>${i}</td><td>${it.page}</td>
+    w.innerHTML = `<table><thead><tr><th>#</th><th>Pág.</th><th>Condición</th><th>Tipo</th><th class="n">Cantidad</th><th class="n">C/desperdicio</th><th class="n">Piezas</th><th class="n">Lámina (${U().area})</th><th class="n">Cal.</th><th class="n">Peso (${U().wt})</th><th class="n">Soportes</th><th class="n">Codos 90°</th><th class="n">Codos 45°</th><th class="n">Vertical (${U().len})</th><th class="n">Drops</th><th class="n">Costo</th><th class="n">Horas</th><th></th></tr></thead><tbody>${rows.map(({ it, c, b, i }) => `
+      <tr data-id="${it.id}" class="${S.selected === it.id ? 'sel' : ''}"><td>${i}</td><td>${esc(sheetName(it.page))}</td>
       <td><span class="sw" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${esc(c.color)};margin-right:5px"></span><select data-cond="${it.id}">${opts(it)}</select></td>
       <td>${typeName[it.type]}</td>
       <td class="n">${b.ok ? esc(fmtQty(b)) : '<span class="nocal">sin escala</span>'}</td>
@@ -916,26 +1196,138 @@ function renderTable() {
       <td class="n">${it.type === 'linear' ? b.el90 : ''}</td><td class="n">${it.type === 'linear' ? b.el45 : ''}</td>
       <td class="n">${it.type === 'linear' ? `<input type="number" min="0" step="any" data-vert="${it.id}" value="${+it.vert || 0}" style="width:64px;text-align:right">` : ''}</td>
       <td class="n">${it.type === 'linear' ? `<input type="number" min="0" step="1" data-drops="${it.id}" value="${+it.drops || 0}" style="width:52px;text-align:right">` : ''}</td>
-      <td class="n">${b.cost ? '$' + nf(b.cost) : ''}</td><td><button data-del="${it.id}" title="Eliminar">✕</button></td></tr>`).join('')}</tbody></table>`;
+      <td class="n">${b.cost ? '$' + nf(b.cost) : ''}</td><td class="n">${b.hours ? nf(b.hours, 1) : ''}</td><td><button data-del="${it.id}" title="Eliminar">✕</button></td></tr>`).join('')}</tbody></table>`;
   } else if (S.tab === 'bom') {
     const rows = bomRows();
     if (!rows.length) { w.innerHTML = `<p style="padding:12px;color:var(--muted)">La lista de materiales aparece cuando tengas mediciones con escala.</p>`; return; }
     const total = rows.reduce((s, r) => s + r.cost, 0);
-    w.innerHTML = `<table><thead><tr><th>Material</th><th class="n">Cantidad</th><th>Unidad</th><th class="n">Precio unit.</th><th class="n">Costo</th><th>Origen</th></tr></thead><tbody>${rows.map(r => `
-      <tr><td>${esc(r.name)}</td><td class="n">${nf(r.q, r.whole ? 0 : 2)}</td><td>${esc(r.unit)}</td><td class="n">${r.price ? '$' + nf(r.price) : ''}</td><td class="n">${r.cost ? '$' + nf(r.cost) : ''}</td><td style="color:var(--muted)">${esc(r.from)}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><td colspan="4">Total</td><td class="n">${total ? '$' + nf(total) : ''}</td><td></td></tr></tfoot></table>`;
+    w.innerHTML = `<table><thead><tr><th>Material</th><th class="n">Cantidad</th><th>Unidad</th><th class="n">Precio unit.</th><th class="n">Costo</th><th class="n">Horas</th><th>Origen</th></tr></thead><tbody>${rows.map(r => `
+      <tr><td>${esc(r.name)}</td><td class="n">${nf(r.q, r.whole ? 0 : 2)}</td><td>${esc(r.unit)}</td><td class="n">${r.price ? '$' + nf(r.price) : ''}</td><td class="n">${r.cost ? '$' + nf(r.cost) : ''}</td><td class="n">${r.hrs ? nf(r.hrs, 1) : ''}</td><td style="color:var(--muted)">${esc(r.from)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="4">Total</td><td class="n">${total ? '$' + nf(total) : ''}</td><td class="n">${nf(rows.reduce((s, r) => s + r.hrs, 0), 1)}</td><td></td></tr></tfoot></table>`;
+  } else if (S.tab === 'estimate') {
+    renderEstimate(w);
   } else {
     const rows = summaryRows();
     if (!rows.length) { w.innerHTML = `<p style="padding:12px;color:var(--muted)">El resumen aparece cuando tengas mediciones.</p>`; return; }
     const total = rows.reduce((s, r) => s + r.cost, 0);
-    w.innerHTML = `<table><thead><tr><th>Condición</th><th>Sistema</th><th>Material</th><th>Tamaño</th><th class="n">Mediciones</th><th class="n">Cantidad</th><th>Unidad</th><th class="n">Desp. %</th><th class="n">C/desperdicio</th><th class="n">Piezas</th><th class="n">Lámina (${U().area})</th><th class="n">Cal.</th><th class="n">Peso (${U().wt})</th><th class="n">Soportes</th><th class="n">Codos 90°</th><th class="n">Codos 45°</th><th class="n">Costo</th></tr></thead><tbody>${rows.map(r => `
+    w.innerHTML = `<table><thead><tr><th>Condición</th><th>Sistema</th><th>Material</th><th>Tamaño</th><th class="n">Mediciones</th><th class="n">Cantidad</th><th>Unidad</th><th class="n">Desp. %</th><th class="n">C/desperdicio</th><th class="n">Piezas</th><th class="n">Lámina (${U().area})</th><th class="n">Cal.</th><th class="n">Peso (${U().wt})</th><th class="n">Soportes</th><th class="n">Codos 90°</th><th class="n">Codos 45°</th><th class="n">Costo</th><th class="n">Horas</th></tr></thead><tbody>${rows.map(r => `
       <tr><td><span class="sw" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${esc(r.c.color)};margin-right:5px"></span>${esc(r.c.name)}${r.nocal ? ` <span class="nocal" title="Mediciones en páginas sin escala">(${r.nocal} sin escala)</span>` : ''}</td>
       <td>${esc(r.c.system)}</td><td>${esc(r.c.material)}</td><td>${esc(sizeLabel(r.c))}</td><td class="n">${r.n}</td>
       <td class="n">${r.c.type === 'count' ? r.q : nf(r.q)}</td><td>${unitOf(r.c)}</td><td class="n">${r.c.waste || 0}</td><td class="n">${r.c.type === 'count' ? nf(r.qw, 0) : nf(r.qw)}</td>
       <td class="n">${r.c.type === 'linear' && r.c.piece ? r.pieces + ` <small style="color:var(--muted)">× ${r.c.piece} ${U().len}</small>` : ''}</td>
-      <td class="n">${r.sheet ? nf(r.sheet) : ''}</td><td class="n">${gaugeOf(r.c)}</td><td class="n">${r.weight ? nf(r.weight, 0) : ''}</td><td class="n">${r.hangers || ''}</td><td class="n">${r.c.type === 'linear' ? r.el90 : ''}</td><td class="n">${r.c.type === 'linear' ? r.el45 : ''}</td><td class="n">${r.cost ? '$' + nf(r.cost) : ''}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><td colspan="16">Total</td><td class="n">${total ? '$' + nf(total) : ''}</td></tr></tfoot></table>`;
+      <td class="n">${r.sheet ? nf(r.sheet) : ''}</td><td class="n">${gaugeOf(r.c)}</td><td class="n">${r.weight ? nf(r.weight, 0) : ''}</td><td class="n">${r.hangers || ''}</td><td class="n">${r.c.type === 'linear' ? r.el90 : ''}</td><td class="n">${r.c.type === 'linear' ? r.el45 : ''}</td><td class="n">${r.cost ? '$' + nf(r.cost) : ''}</td><td class="n">${r.hours ? nf(r.hours, 1) : ''}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="16">Total</td><td class="n">${total ? '$' + nf(total) : ''}</td><td class="n">${nf(rows.reduce((s, r) => s + r.hours, 0), 1)}</td></tr></tfoot></table>`;
   }
+}
+function renderEstimate(w) {
+  const e = S.est, t = estimate();
+  const inp = (k, label, step) => `<label>${label}</label><input type="number" step="${step || 'any'}" data-est="${k}" value="${+e[k] || 0}">`;
+  w.innerHTML = `<div class="est">
+    <div class="estCol">
+      <div class="form estForm">${inp('rate', 'Tarifa mano de obra ($/h)')}${inp('tax', 'Impuesto materiales (%)')}${inp('oh', 'Overhead (%)')}${inp('profit', 'Utilidad (%)')}</div>
+      <div class="estBtns"><button id="btnPropInfo">Datos de la propuesta…</button><button id="btnProposal" class="primary">Generar propuesta</button></div>
+      <div class="estBtns"><button id="btnPriceOut" title="Descarga un Excel con todos los materiales para llenar precios y horas">Exportar lista de precios</button><button id="btnPriceIn" title="Carga precios y horas desde Excel">Importar lista de precios</button></div>
+    </div>
+    <table class="estTot"><tbody>
+      <tr><td>Costo de materiales</td><td class="n">${money(t.mat)}</td></tr>
+      <tr><td>Impuesto (${nf(e.tax, 2)}%)</td><td class="n">${money(t.tax)}</td></tr>
+      <tr><td>Mano de obra (${nf(t.hrs, 1)} h × ${money(e.rate)})</td><td class="n">${money(t.labor)}</td></tr>
+      <tr class="sub"><td>Costo directo</td><td class="n">${money(t.direct)}</td></tr>
+      <tr><td>Overhead (${nf(e.oh, 2)}%)</td><td class="n">${money(t.oh)}</td></tr>
+      <tr><td>Utilidad (${nf(e.profit, 2)}%)</td><td class="n">${money(t.profit)}</td></tr>
+      <tr class="grand"><td>Total de la oferta</td><td class="n">${money(t.total)}</td></tr>
+    </tbody></table>
+    <table class="estSys"><thead><tr><th>Sistema</th><th class="n">Materiales</th><th class="n">Horas</th><th class="n">Mano de obra</th><th class="n">Total</th></tr></thead><tbody>
+      ${t.systems.map(r => `<tr><td>${esc(r.name)}</td><td class="n">${money(r.mat)}</td><td class="n">${nf(r.hrs, 1)}</td><td class="n">${money(r.labor)}</td><td class="n">${money(r.total)}</td></tr>`).join('') || '<tr><td colspan="5" style="color:var(--muted)">Sin mediciones con escala.</td></tr>'}
+    </tbody></table>
+  </div>`;
+  $('#btnPropInfo').addEventListener('click', proposalInfo);
+  $('#btnProposal').addEventListener('click', openProposal);
+  $('#btnPriceOut').addEventListener('click', exportPriceList);
+  $('#btnPriceIn').addEventListener('click', () => $('#filePrice').click());
+}
+$('#tableWrap').addEventListener('change', e => {
+  const f = e.target.closest('[data-est]'); if (!f) return;
+  S.est[f.dataset.est] = +f.value || 0; autosave(); renderTable();
+});
+function proposalInfo() {
+  const e = S.est;
+  const fld = (k, l, ph) => `<label>${l}</label><input type="text" id="p_${k}" value="${esc(e[k])}" placeholder="${ph || ''}">`;
+  modal(`<h3>Datos de la propuesta</h3><div class="form">
+    ${fld('company', 'Empresa', 'ABC Mechanical LLC')}${fld('contact', 'Contacto / licencia', 'Phone · email · License #')}${fld('estimator', 'Estimador')}
+    ${fld('client', 'Cliente', 'General contractor')}${fld('project', 'Proyecto')}${fld('address', 'Dirección de la obra')}${fld('bidDate', 'Fecha de la oferta', 'MM/DD/YYYY')}
+    <label>Incluye</label><textarea id="p_inclusions" rows="4">${esc(e.inclusions)}</textarea>
+    <label>Excluye</label><textarea id="p_exclusions" rows="5">${esc(e.exclusions)}</textarea>
+    <label>Desglose</label><select id="p_bySystem"><option value="1">Mostrar montos por sistema</option><option value="0">Solo monto total</option></select>
+  </div>`, [{ t: 'Cancelar' }, { t: 'Guardar', primary: true, f: () => {
+    ['company', 'contact', 'estimator', 'client', 'project', 'address', 'bidDate', 'inclusions', 'exclusions'].forEach(k => e[k] = $('#p_' + k).value);
+    e.bySystem = $('#p_bySystem').value === '1';
+    try { localStorage.setItem('smarttakeoff:company', JSON.stringify({ company: e.company, contact: e.contact, estimator: e.estimator })); } catch (err) { }
+    autosave();
+  } }]);
+  $('#p_bySystem').value = e.bySystem ? '1' : '0';
+}
+function openProposal() {
+  const e = S.est, t = estimate(), en = expEN();
+  const L = en ? { title: 'PROPOSAL', to: 'To', project: 'Project', address: 'Location', date: 'Date', est: 'Estimator', scope: 'Scope of Work', sys: 'System', amt: 'Amount', total: 'Total Base Bid', inc: 'Inclusions', exc: 'Exclusions', drawings: 'Based on drawing', valid: 'This proposal is valid for 30 days from the date above.', acc: 'Accepted by', sig: 'Signature', print: 'Print / Save as PDF', items: 'Includes' }
+    : { title: 'PROPUESTA', to: 'Para', project: 'Proyecto', address: 'Ubicación', date: 'Fecha', est: 'Estimador', scope: 'Alcance del trabajo', sys: 'Sistema', amt: 'Monto', total: 'Total de la oferta', inc: 'Incluye', exc: 'Excluye', drawings: 'Basado en el plano', valid: 'Esta propuesta es válida por 30 días a partir de la fecha indicada.', acc: 'Aceptado por', sig: 'Firma', print: 'Imprimir / Guardar como PDF', items: 'Incluye' };
+  const date = e.bidDate || new Date().toLocaleDateString('en-US');
+  const scopeItems = name => [...new Set(S.items.filter(isMeasure).map(it => condById(it.cond)).filter(c => c && (c.system || '—') === name).map(c => c.name))].join(', ');
+  const lines = s => esc(s).split('\n').filter(x => x.trim()).map(x => `<li>${x}</li>`).join('');
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(L.title)} · ${esc(e.project || baseName())}</title><style>
+    body{font:13px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#1d2330;max-width:780px;margin:32px auto;padding:0 24px}
+    header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #d9480f;padding-bottom:12px;margin-bottom:18px}
+    h1{margin:0;font-size:22px;letter-spacing:2px;color:#d9480f} .co{font-size:17px;font-weight:700} .muted{color:#677084}
+    table{width:100%;border-collapse:collapse;margin:8px 0 16px} td,th{padding:6px 8px;border-bottom:1px solid #dde1e8;text-align:left;vertical-align:top} th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#677084}
+    .n{text-align:right;white-space:nowrap} .tot td{font-weight:700;font-size:15px;border-top:2px solid #1d2330;border-bottom:0}
+    .meta td{border:0;padding:2px 8px 2px 0} h2{font-size:14px;text-transform:uppercase;letter-spacing:.6px;margin:20px 0 4px}
+    .sig{display:flex;gap:40px;margin-top:40px} .sig div{flex:1;border-top:1px solid #1d2330;padding-top:4px;color:#677084}
+    .bar{position:sticky;top:0;background:#fff;padding:8px 0;text-align:right} @media print{.bar{display:none} body{margin:0}}
+  </style></head><body>
+  <div class="bar"><button onclick="window.print()">${L.print}</button></div>
+  <header><div><div class="co">${esc(e.company || 'Your Company')}</div><div class="muted">${esc(e.contact)}</div></div><h1>${L.title}</h1></header>
+  <table class="meta"><tr><td class="muted">${L.to}</td><td>${esc(e.client)}</td><td class="muted">${L.date}</td><td>${esc(date)}</td></tr>
+  <tr><td class="muted">${L.project}</td><td>${esc(e.project || baseName())}</td><td class="muted">${L.est}</td><td>${esc(e.estimator)}</td></tr>
+  <tr><td class="muted">${L.address}</td><td colspan="3">${esc(e.address)}</td></tr></table>
+  <h2>${L.scope}</h2><p class="muted">${L.drawings}: ${esc(S.fileName || '')}</p>
+  <table><thead><tr><th>${L.sys}</th><th>${L.items}</th>${e.bySystem ? `<th class="n">${L.amt}</th>` : ''}</tr></thead><tbody>
+  ${t.systems.map(r => `<tr><td>${esc(r.name)}</td><td>${esc(scopeItems(r.name))}</td>${e.bySystem ? `<td class="n">${money(r.total)}</td>` : ''}</tr>`).join('')}
+  <tr class="tot"><td colspan="${e.bySystem ? 2 : 1}">${L.total}</td><td class="n">${money(t.total)}</td></tr></tbody></table>
+  <h2>${L.inc}</h2><ul>${lines(e.inclusions)}</ul><h2>${L.exc}</h2><ul>${lines(e.exclusions)}</ul>
+  <p class="muted">${L.valid}</p>
+  <div class="sig"><div>${L.acc}</div><div>${L.sig}</div><div>${L.date}</div></div>
+  </body></html>`;
+  const win = window.open('', '_blank');
+  if (!win) { toast('El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio.'); return; }
+  win.document.open(); win.document.write(html); win.document.close();
+}
+function exportPriceList() {
+  const m = new Map();
+  S.conditions.forEach(c => {
+    if (!m.has(c.name)) m.set(c.name, { 'Material': c.name, 'Unidad': unitOf(c), 'Precio unit.': c.price || null, 'Horas MO (h/u)': c.labor || null });
+    (c.asm || []).forEach(a => { if (!m.has(a.name)) m.set(a.name, { 'Material': a.name, 'Unidad': a.unit, 'Precio unit.': a.price || null, 'Horas MO (h/u)': a.lab || null }); });
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheetFrom(trRows([...m.values()])), T('Precios'));
+  XLSX.writeFile(wb, 'SmartTakeoff_' + (expEN() ? 'price_list' : 'lista_precios') + '.xlsx');
+  toast('Lista de precios exportada. Llena precios y horas y vuelve a importarla.');
+}
+async function importPriceList(f) {
+  try {
+    const wb = XLSX.read(await f.arrayBuffer());
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+    const pick = (r, re) => { const k = Object.keys(r).find(k => re.test(k)); return k ? r[k] : ''; };
+    const list = new Map();
+    rows.forEach(r => { const n = String(pick(r, /^(material|item|descrip|nombre|name)/i)).trim().toLowerCase(); if (n) list.set(n, { price: pick(r, /precio|price|cost/i), lab: pick(r, /hora|hour|labor|mo\b/i) }); });
+    let n = 0; pushUndo();
+    const val = v => v === '' || v == null ? null : +v;
+    S.conditions.forEach(c => {
+      const m = list.get(c.name.toLowerCase());
+      if (m) { if (val(m.price) != null) c.price = val(m.price); if (val(m.lab) != null) c.labor = val(m.lab); n++; }
+      (c.asm || []).forEach(a => { const m2 = list.get(a.name.toLowerCase()); if (m2) { if (val(m2.price) != null) a.price = val(m2.price); if (val(m2.lab) != null) a.lab = val(m2.lab); n++; } });
+    });
+    refresh(); toast(n ? `${n} material(es) actualizados` : 'No encontré materiales con el mismo nombre');
+  } catch (err) { console.error(err); toast('No se pudo leer el archivo: ' + err.message); }
 }
 $('#tableWrap').addEventListener('click', e => {
   const del = e.target.closest('[data-del]');
@@ -960,11 +1352,20 @@ document.querySelectorAll('#tabs [data-tab]').forEach(b => b.addEventListener('c
 function renderPages() {
   const pc = n => S.items.filter(i => i.page === n && isMeasure(i)).length;
   let h = '';
-  for (let n = 1; n <= S.numPages; n++) h += `<button data-page="${n}" class="${n === S.pageNum ? 'on' : ''}" title="${pc(n)} medición(es)${cal(n) ? '' : ' · sin escala'}">${n}${cal(n) ? '' : '*'}</button>`;
+  for (let n = 1; n <= S.numPages; n++) {
+    const sh = S.sheets[n - 1] || {}; const k = pc(n);
+    h += `<button data-page="${n}" class="sheet ${n === S.pageNum ? 'on' : ''} ${S.pdfs[sh.doc] ? '' : 'missing'}" title="${k} medición(es)${cal(n) ? '' : ' · sin escala'}"><b>${esc(sh.name || n)}${sh.disc && DISC_LABEL[sh.disc] ? `<span class="disc">${esc(DISC_LABEL[sh.disc])}</span>` : ''}</b><small>${esc((sh.doc || '').replace(/\.pdf$/i, ''))} · p${sh.page || n}${cal(n) ? '' : ' · sin escala'}</small>${k ? `<span class="cnt">${k}</span>` : ''}</button>`;
+  }
   $('#pageList').innerHTML = h;
   $('#pageInfo').textContent = S.numPages ? `${S.pageNum} / ${S.numPages}` : '';
 }
 $('#pageList').addEventListener('click', e => { const b = e.target.closest('[data-page]'); if (b) gotoPage(+b.dataset.page); });
+$('#pageList').addEventListener('dblclick', e => {
+  const b = e.target.closest('[data-page]'); if (!b) return; const sh = S.sheets[+b.dataset.page - 1]; if (!sh) return;
+  modal(`<h3>Nombre de la hoja</h3><div class="form"><label>Nombre</label><input type="text" id="shName" value="${esc(sh.name)}" autofocus><label>Disciplina</label><select id="shDisc"><option value="">(sin detectar)</option>${Object.entries(DISC_LABEL).map(([k, v]) => `<option value="${k}" ${sh.disc === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>`, [{ t: 'Cancelar' }, { t: 'Guardar', primary: true, f: () => { const v = $('#shName').value.trim(); if (v) { if (v !== sh.name) sh.auto = false; sh.name = v; } sh.disc = $('#shDisc').value; refresh(); } }]);
+});
+$('#btnAddPdf').addEventListener('click', () => { if (!S.pdf) { $('#filePdf').click(); return; } $('#filePdf2').click(); });
+$('#filePdf2').addEventListener('change', e => { const fs = [...e.target.files]; e.target.value = ''; (async () => { for (const f of fs) await openPdf(f, true); })(); });
 function renderStatus() {
   const p = S.pages[S.pageNum];
   $('#stScale').innerHTML = 'Escala: ' + (p && p.cal ? '<b>' + esc(p.calLabel) + '</b>' : '<b class="nocal">sin calibrar</b>');
@@ -981,6 +1382,7 @@ $('#unitsSel').addEventListener('change', e => {
   S.items.forEach(it => { if (it.vert) it.vert = +(it.vert * f).toFixed(3); });
   S.conditions.forEach(c => {
     c.piece = +(c.piece * f).toFixed(3); c.hanger = +(c.hanger * f).toFixed(3);
+    c.ht = +((+c.ht || 0) * f).toFixed(3); c.th = +((+c.th || 0) * fs).toFixed(2);
     c.w = +(c.w * fs).toFixed(2); c.h = +(c.h * fs).toFixed(2); c.d = +(c.d * fs).toFixed(2);
     if (c.price) c.price = +(c.price / (c.type === 'area' ? f * f : c.type === 'linear' ? f : 1)).toFixed(4);
   });
@@ -992,30 +1394,30 @@ $('#unitsSel').addEventListener('change', e => {
 function detailSheetRows() {
   const u = U();
   return detailRows().map(({ it, c, b, i }) => ({
-    '#': i, 'Página': it.page, 'Condición': c.name, 'Sistema': c.system, 'Material': c.material, 'Tamaño': sizeLabel(c), 'Tipo': typeName[it.type],
+    '#': i, 'Página': sheetName(it.page), 'Condición': c.name, 'Oficio': tradeName(c.trade), 'Sistema': c.system, 'Material': c.material, 'Tamaño': sizeLabel(c), 'Tipo': typeName[it.type],
     'Cantidad': b.ok ? +b.q.toFixed(3) : null, 'Unidad': b.unit, 'Desperdicio %': c.waste || 0, 'Cant. c/desperdicio': b.ok ? +b.qw.toFixed(3) : null,
     'Piezas': b.pieces === '' ? null : b.pieces, ['Largo pieza (' + u.len + ')']: it.type === 'linear' && c.piece ? c.piece : null,
     ['Lámina (' + u.area + ')']: b.sheet === '' ? null : +b.sheet.toFixed(2), 'Calibre': b.gauge || null, ['Peso (' + u.wt + ')']: b.weight === '' ? null : Math.round(b.weight), 'Soportes': b.hangers === '' ? null : b.hangers,
     'Codos 90°': it.type === 'linear' ? b.el90 : null, 'Codos 45°': it.type === 'linear' ? b.el45 : null, ['Vertical (' + u.len + ')']: it.type === 'linear' ? b.vert : null, 'Drops': it.type === 'linear' ? b.drops : null,
-    'Precio unit.': c.price || null, 'Costo': b.cost ? +b.cost.toFixed(2) : null, 'Escala': (S.pages[it.page] || {}).calLabel || 'sin calibrar'
+    'Precio unit.': c.price || null, 'Costo': b.cost ? +b.cost.toFixed(2) : null, 'Horas MO': b.hours ? +b.hours.toFixed(2) : null, 'Escala': (S.pages[it.page] || {}).calLabel || 'sin calibrar'
   }));
 }
 function summarySheetRows() {
   const u = U();
   return summaryRows().map(r => ({
-    'Condición': r.c.name, 'Sistema': r.c.system, 'Material': r.c.material, 'Tamaño': sizeLabel(r.c), 'Tipo': typeName[r.c.type], 'Mediciones': r.n,
+    'Condición': r.c.name, 'Oficio': tradeName(r.c.trade), 'Sistema': r.c.system, 'Material': r.c.material, 'Tamaño': sizeLabel(r.c), 'Tipo': typeName[r.c.type], 'Mediciones': r.n,
     'Cantidad': +r.q.toFixed(3), 'Unidad': unitOf(r.c), 'Desperdicio %': r.c.waste || 0, 'Cant. c/desperdicio': +r.qw.toFixed(3),
     'Piezas': r.c.type === 'linear' && r.c.piece ? r.pieces : null, ['Largo pieza (' + u.len + ')']: r.c.type === 'linear' && r.c.piece ? r.c.piece : null,
-    ['Lámina (' + u.area + ')']: r.sheet ? +r.sheet.toFixed(2) : null, 'Calibre': gaugeOf(r.c) || null, ['Peso (' + u.wt + ')']: r.weight ? Math.round(r.weight) : null, 'Soportes': r.hangers || null, 'Codos 90°': r.c.type === 'linear' ? r.el90 : null, 'Codos 45°': r.c.type === 'linear' ? r.el45 : null, 'Precio unit.': r.c.price || null, 'Costo': r.cost ? +r.cost.toFixed(2) : null,
+    ['Lámina (' + u.area + ')']: r.sheet ? +r.sheet.toFixed(2) : null, 'Calibre': gaugeOf(r.c) || null, ['Peso (' + u.wt + ')']: r.weight ? Math.round(r.weight) : null, 'Soportes': r.hangers || null, 'Codos 90°': r.c.type === 'linear' ? r.el90 : null, 'Codos 45°': r.c.type === 'linear' ? r.el45 : null, 'Precio unit.': r.c.price || null, 'Costo': r.cost ? +r.cost.toFixed(2) : null, 'Horas MO': r.hours ? +r.hours.toFixed(2) : null,
     'Sin escala': r.nocal || null
   }));
 }
 function conditionSheetRows() {
   const u = U();
   return S.conditions.map(c => ({
-    'Nombre': c.name, 'Tipo': typeName[c.type], 'Color': c.color, 'Sistema': c.system, 'Material': c.material, 'Tamaño': c.size,
+    'Nombre': c.name, 'Oficio': tradeName(c.trade), 'Tipo': typeName[c.type], 'Color': c.color, 'Sistema': c.system, 'Material': c.material, 'Tamaño': c.size,
     'Forma': c.shape === 'rect' ? 'Rectangular' : c.shape === 'round' ? 'Redondo' : '', ['Ancho (' + u.size + ')']: c.w || null, ['Alto (' + u.size + ')']: c.h || null, ['Diámetro (' + u.size + ')']: c.d || null, 'Calibre': c.shape === 'none' ? null : (c.gauge === 'auto' || !c.gauge ? 'auto' : +c.gauge),
-    ['Largo pieza (' + u.len + ')']: c.piece || null, ['Soporte cada (' + u.len + ')']: c.hanger || null, 'Desperdicio %': c.waste || 0, 'Precio unit.': c.price || null
+    ['Largo pieza (' + u.len + ')']: c.piece || null, ['Soporte cada (' + u.len + ')']: c.hanger || null, 'Desperdicio %': c.waste || 0, 'Precio unit.': c.price || null, 'Horas MO (h/u)': c.labor || null
   }));
 }
 const EN = { '#': '#', 'Página': 'Sheet', 'Condición': 'Item', 'Sistema': 'System', 'Material': 'Material', 'Tamaño': 'Size', 'Tipo': 'Type', 'Cantidad': 'Quantity', 'Unidad': 'Unit',
@@ -1024,7 +1426,8 @@ const EN = { '#': '#', 'Página': 'Sheet', 'Condición': 'Item', 'Sistema': 'Sys
   'Diámetro': 'Diameter', 'Soporte cada': 'Hanger Spacing', 'Total': 'Total', 'Proyecto': 'Project', 'Plano': 'Drawing', 'Unidades': 'Units', 'Fecha': 'Date', 'Generado con': 'Generated with',
   'Resumen': 'Summary', 'Detalle': 'Detail', 'Condiciones': 'Conditions', 'Lineal': 'Linear', 'Área': 'Area', 'Conteo': 'Count', 'Rectangular': 'Rectangular', 'Redondo': 'Round', 'Imperial': 'Imperial', 'Métrico': 'Metric',
   'sin calibrar': 'not calibrated', 'Codos 90°': '90° Elbows', 'Codos 45°': '45° Elbows', 'Vertical': 'Vertical', 'Drops': 'Drops', 'Materiales': 'Bill of Materials', 'Ensambles': 'Assemblies',
-  'Factor': 'Factor', 'Por': 'Per', 'Origen': 'Used In' };
+  'Factor': 'Factor', 'Por': 'Per', 'Origen': 'Used In', 'Horas MO': 'Labor Hrs', 'Estimado': 'Estimate', 'Impuesto %': 'Material Tax %', 'Impuesto': 'Material Tax', 'Tarifa $/h': 'Labor Rate $/hr',
+  'Mano de obra': 'Labor', 'Costo directo': 'Direct Cost', 'Overhead %': 'Overhead %', 'Overhead': 'Overhead', 'Utilidad %': 'Profit %', 'Utilidad': 'Profit', 'Total de la oferta': 'Total Bid', 'Precios': 'Price List', 'Costo de materiales': 'Material Cost' };
 const EN_UNIT = { 'ft': 'LF', 'ft²': 'SF', 'pza': 'EA', 'm': 'm', 'm²': 'm²' };
 const expEN = () => $('#expLang').value === 'en';
 const T = s => expEN() ? (EN[s] || s) : s;
@@ -1036,9 +1439,9 @@ function trVal(v) {
   return EN[v] || v;
 }
 const trRows = rows => expEN() ? rows.map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [trKey(k), trVal(v)]))) : rows;
-function bomSheetRows() { return bomRows().map(r => ({ 'Material': r.name, 'Cantidad': r.whole ? r.q : +r.q.toFixed(2), 'Unidad': r.unit, 'Precio unit.': r.price || null, 'Costo': r.cost ? +r.cost.toFixed(2) : null, 'Origen': r.from })); }
+function bomSheetRows() { return bomRows().map(r => ({ 'Material': r.name, 'Cantidad': r.whole ? r.q : +r.q.toFixed(2), 'Unidad': r.unit, 'Precio unit.': r.price || null, 'Costo': r.cost ? +r.cost.toFixed(2) : null, 'Horas MO': r.hrs ? +r.hrs.toFixed(2) : null, 'Origen': r.from })); }
 function asmSheetRows() {
-  const out = []; S.conditions.forEach(c => (c.asm || []).forEach(a => out.push({ 'Condición': c.name, 'Material': a.name, 'Factor': a.f, 'Por': a.base, 'Unidad': a.unit, 'Precio unit.': a.price || null })));
+  const out = []; S.conditions.forEach(c => (c.asm || []).forEach(a => out.push({ 'Condición': c.name, 'Material': a.name, 'Factor': a.f, 'Por': a.base, 'Unidad': a.unit, 'Precio unit.': a.price || null, 'Horas MO (h/u)': a.lab || null })));
   return out;
 }
 function baseName() { return (S.fileName || 'takeoff').replace(/\.pdf$/i, ''); }
@@ -1068,6 +1471,13 @@ $('#btnXlsx').addEventListener('click', () => {
   }
   XLSX.utils.book_append_sheet(wb, sheetFrom(trRows(detailSheetRows())), T('Detalle'));
   XLSX.utils.book_append_sheet(wb, sheetFrom(trRows(conditionSheetRows())), T('Condiciones'));
+  const t = estimate(), e = S.est;
+  const estA = [[T('Costo de materiales'), +t.mat.toFixed(2)], [T('Impuesto %'), (+e.tax || 0) / 100], [T('Impuesto'), { f: 'B1*B2' }], [T('Horas MO'), +t.hrs.toFixed(2)], [T('Tarifa $/h'), +e.rate || 0], [T('Mano de obra'), { f: 'B4*B5' }],
+    [T('Costo directo'), { f: 'B1+B3+B6' }], [T('Overhead %'), (+e.oh || 0) / 100], [T('Overhead'), { f: 'B7*B8' }], [T('Utilidad %'), (+e.profit || 0) / 100], [T('Utilidad'), { f: '(B7+B9)*B10' }], [T('Total de la oferta'), { f: 'B7+B9+B11' }]];
+  const wsE = XLSX.utils.aoa_to_sheet(estA.map(r => [r[0], typeof r[1] === 'object' ? null : r[1]]));
+  estA.forEach((r, i) => { const ref = 'B' + (i + 1); if (typeof r[1] === 'object') wsE[ref] = { t: 'n', f: r[1].f }; wsE[ref].z = /%$/.test(r[0]) ? '0.00%' : /Hor|Hrs/.test(r[0]) ? '0.0' : '$#,##0.00'; });
+  wsE['!cols'] = [{ wch: 26 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(wb, wsE, T('Estimado'));
   const asm = trRows(asmSheetRows()); if (asm.length) XLSX.utils.book_append_sheet(wb, sheetFrom(asm), T('Ensambles'));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[T('Proyecto'), baseName()], [T('Plano'), S.fileName], [T('Unidades'), T(S.units === 'imperial' ? 'Imperial' : 'Métrico')], [T('Fecha'), new Date().toLocaleString('en-US')], [T('Generado con'), 'SmartTakeoff']]), 'Info');
   XLSX.writeFile(wb, baseName() + '_takeoff.xlsx');
@@ -1089,6 +1499,7 @@ function download(blob, name) { const a = document.createElement('a'); a.href = 
 
 /* ---------- Import conditions from Excel ---------- */
 $('#btnImportCond').addEventListener('click', () => $('#fileCond').click());
+$('#filePrice').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) importPriceList(f); });
 $('#fileCond').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   try {
@@ -1105,7 +1516,7 @@ $('#fileCond').addEventListener('change', async e => {
         system: String(pick(r, /^sistema|system/i)), material: String(pick(r, /^material/i)), size: String(pick(r, /^tama|size/i)),
         shape: /rect/i.test(forma) ? 'rect' : /redond|round/i.test(forma) ? 'round' : 'none',
         gauge: String(pick(r, /^calibre|gauge/i) || 'auto'), w: +pick(r, /^ancho|width/i) || 0, h: +pick(r, /^alto|height/i) || 0, d: +pick(r, /^di[aá]m/i) || 0,
-        piece: +pick(r, /^largo pieza|piece/i) || 0, hanger: +pick(r, /^soporte|hanger/i) || 0, waste: +pick(r, /^desperd|waste/i) || 0, price: +pick(r, /^precio|price|costo unit/i) || 0 };
+        piece: +pick(r, /^largo pieza|piece/i) || 0, hanger: +pick(r, /^soporte|hanger/i) || 0, waste: +pick(r, /^desperd|waste/i) || 0, price: +pick(r, /^precio|price|costo unit/i) || 0, labor: +pick(r, /^(horas|labor)/i) || 0 };
       if (!/^(auto|16|18|20|22|24|26)$/.test(c.gauge)) c.gauge = 'auto';
       const ex = S.conditions.find(x => x.name.toLowerCase() === name.toLowerCase());
       if (ex) Object.assign(ex, c, { id: ex.id, type: ex.type, asm: ex.asm || [] }); else S.conditions.push(c);
@@ -1119,7 +1530,7 @@ $('#fileCond').addEventListener('change', async e => {
         const c = S.conditions.find(x => x.name.toLowerCase() === cn.toLowerCase()); if (!c) return;
         if (!touched.has(c.id)) { c.asm = []; touched.add(c.id); }
         const base = String(pick(r, /^(por|per)$/i)).trim();
-        c.asm.push({ name: mn, f: +pick(r, /^factor/i) || 0, base: ASM_BASES.some(b => b[0] === base) ? base : 'qty', unit: String(pick(r, /^(unidad|unit)$/i) || 'EA'), price: +pick(r, /^precio|price/i) || 0 });
+        c.asm.push({ lab: +pick(r, /^(horas|labor)/i) || 0, name: mn, f: +pick(r, /^factor/i) || 0, base: ASM_BASES.some(b => b[0] === base) ? base : 'qty', unit: String(pick(r, /^(unidad|unit)$/i) || 'EA'), price: +pick(r, /^precio|price/i) || 0 });
       });
     }
     refresh(); toast(n ? `${n} condición(es) importadas o actualizadas` : 'No encontré filas con columna “Nombre”');
@@ -1127,21 +1538,73 @@ $('#fileCond').addEventListener('change', async e => {
 });
 
 /* ---------- Project save/load ---------- */
-function saveProject() {
-  if (!S.fileName) { toast('Abre un plano primero'); return; }
-  download(new Blob([JSON.stringify(projectData(), null, 1)], { type: 'application/json' }), baseName() + '.takeoff.json');
+/* ---------- Project files (.takeoff) with the drawings inside ----------
+   Saved to any folder the user picks, e.g. OneDrive or Dropbox, so the sync app carries it to their other computers.
+   Where the browser supports it (Chrome, Edge, the desktop app) the file stays linked and saves itself after each change. */
+const canPickFiles = 'showSaveFilePicker' in window;
+const PICK_TYPES = [{ description: 'SmartTakeoff project', accept: { 'application/json': ['.takeoff'] } }];
+function b64(buf) { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
+function unb64(str) { const bin = atob(str); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+let pdfCache = { key: '', data: null };
+function projectFileData() {
+  const docs = [...new Set(S.sheets.map(x => x.doc))].filter(d => S.pdfBytes[d]);
+  const key = docs.map(d => d + ':' + S.pdfBytes[d].byteLength).join('|');
+  if (pdfCache.key !== key) pdfCache = { key, data: docs.map(d => ({ name: d, data: b64(S.pdfBytes[d]) })) };   // encode the drawings once, not on every autosave
+  return JSON.stringify({ ...projectData(), version: 2, pdfs: pdfCache.data });
 }
-$('#btnSave').addEventListener('click', saveProject);
-$('#btnLoad').addEventListener('click', () => $('#fileJson').click());
-$('#fileJson').addEventListener('change', async e => {
-  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+function renderSaveState() {
+  const el = $('#stSave'); if (!el) return;
+  if (!S.fileHandle) { el.textContent = ''; return; }
+  el.innerHTML = S.dirty ? `<b>${esc(S.fileHandle.name)}</b> · Guardando…` : `<b>${esc(S.fileHandle.name)}</b> · Guardado ${S.savedAt || ''}`;
+}
+async function writeProjectFile(manual) {
+  if (!S.fileHandle) return;
   try {
-    const o = JSON.parse(await f.text());
-    loadProjectData(o); S.fileName = o.fileName || S.fileName; S.undo = []; S.redo = [];
+    const w = await S.fileHandle.createWritable(); await w.write(projectFileData()); await w.close();
+    S.dirty = false; S.savedAt = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); renderSaveState();
+    if (manual) toast('Proyecto guardado en ' + S.fileHandle.name);
+  } catch (err) { console.error(err); S.dirty = true; renderSaveState(); toast('No se pudo guardar el archivo: ' + err.message); }
+}
+async function saveProject(asNew) {
+  if (!S.fileName) { toast('Abre un plano primero'); return; }
+  if (!canPickFiles) { download(new Blob([projectFileData()], { type: 'application/json' }), baseName() + '.takeoff'); toast('Proyecto descargado. Muévelo a tu carpeta de OneDrive o Dropbox.'); return; }
+  if (!S.fileHandle || asNew) {
+    try { S.fileHandle = await window.showSaveFilePicker({ suggestedName: baseName() + '.takeoff', types: PICK_TYPES }); }
+    catch (err) { if (err.name !== 'AbortError') toast('No se pudo guardar el archivo: ' + err.message); return; }
+  }
+  await writeProjectFile(true);
+}
+async function loadProjectFile(text, handle) {
+  const o = JSON.parse(text);
+  loadProjectData(o); S.fileName = o.fileName || S.fileName; S.undo = []; S.redo = []; S.selected = null;
+  S.fileHandle = handle || null; S.dirty = false; S.savedAt = '';
+  if (Array.isArray(o.pdfs) && o.pdfs.length) {
+    S.pdfs = {}; S.pdfBytes = {}; S.pdf = null;
+    const fh = S.fileHandle; S.fileHandle = null;                 // don't autosave while the drawings are loading
+    for (const d of o.pdfs) await openPdf(new File([unb64(d.data)], d.name, { type: 'application/pdf' }), true);
+    S.fileHandle = fh; S.dirty = false;
+    if (S.numPages) await gotoPage(1, true);
+    toast('Proyecto abierto con ' + o.pdfs.length + ' plano(s)');
+  } else {
     refresh();
     toast(S.pdf ? 'Proyecto cargado' : `Proyecto cargado. Ahora abre el plano “${o.fileName}”.`);
-  } catch (err) { toast('No se pudo abrir el proyecto: ' + err.message); }
+  }
+  renderSaveState();
+}
+$('#btnSave').addEventListener('click', () => saveProject(false));
+$('#btnLoad').addEventListener('click', async () => {
+  if (!canPickFiles) { $('#fileJson').click(); return; }
+  try {
+    const [h] = await window.showOpenFilePicker({ types: [{ description: 'SmartTakeoff project', accept: { 'application/json': ['.takeoff', '.json'] } }] });
+    const f = await h.getFile();
+    await loadProjectFile(await f.text(), /\.takeoff$/i.test(f.name) ? h : null);
+  } catch (err) { if (err.name !== 'AbortError') toast('No se pudo abrir el proyecto: ' + err.message); }
 });
+$('#fileJson').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { await loadProjectFile(await f.text(), null); } catch (err) { toast('No se pudo abrir el proyecto: ' + err.message); }
+});
+window.addEventListener('beforeunload', e => { if (S.fileHandle && S.dirty) { writeProjectFile(false); e.preventDefault(); e.returnValue = ''; } });
 
 /* ---------- Open PDF (button + drag & drop) ---------- */
 $('#btnOpen').addEventListener('click', () => $('#filePdf').click());
@@ -1151,10 +1614,125 @@ const viewer = $('#viewer');
 ['dragenter', 'dragover'].forEach(t => viewer.addEventListener(t, e => { e.preventDefault(); viewer.classList.add('drag'); }));
 ['dragleave', 'drop'].forEach(t => viewer.addEventListener(t, e => { e.preventDefault(); viewer.classList.remove('drag'); }));
 viewer.addEventListener('drop', e => {
+  const t = [...e.dataTransfer.files].find(f => /\.(takeoff|json)$/i.test(f.name));
+  if (t) { t.text().then(x => loadProjectFile(x, null)).catch(err => toast('No se pudo abrir el proyecto: ' + err.message)); return; }
   const f = [...e.dataTransfer.files].find(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
   if (f) openPdf(f); else toast('Suelta un archivo PDF');
 });
 
+let splitDrag = null;
+$('#split').addEventListener('mousedown', e => { splitDrag = { y: e.clientY, h: $('#bottom').offsetHeight }; e.preventDefault(); });
+window.addEventListener('mousemove', e => { if (!splitDrag) return; const h = Math.max(120, Math.min(window.innerHeight - 200, splitDrag.h - (e.clientY - splitDrag.y))); document.querySelector('main').style.setProperty('--bottomH', h + 'px'); });
+window.addEventListener('mouseup', () => { splitDrag = null; });
+$('#opacity').addEventListener('input', e => { $('#overlay').style.opacity = e.target.value / 100; });
+/* ---------- Compare revisions ---------- */
+$('#btnCompare').addEventListener('click', () => { if (!curPage) { toast('Abre un plano primero'); return; } $('#fileCmp').click(); });
+$('#fileCmp').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) compareRevision(f); });
+async function compareRevision(file) {
+  try {
+    const sh = S.sheets[S.pageNum - 1];
+    const buf = await file.arrayBuffer(); const bytes = buf.slice(0);
+    const pdf = await pdfjs.getDocument({ data: buf }).promise;
+    // match the sheet by its number in the title block, else by page position
+    let pg = 0;
+    for (let i = 1; i <= pdf.numPages && !pg; i++) { const nm = (await detectSheet(pdf, i)).name; if (nm && sh && nm === sh.name) pg = i; }
+    if (!pg) pg = sh && sh.page <= pdf.numPages ? sh.page : 1;
+    const np = await pdf.getPage(pg);
+    const cv = $('#pdfCanvas'), W = cv.width, H = cv.height, ctx = cv.getContext('2d');
+    const oldImg = ctx.getImageData(0, 0, W, H);
+    const off = document.createElement('canvas'); off.width = W; off.height = H;
+    const oc = off.getContext('2d'); oc.fillStyle = '#fff'; oc.fillRect(0, 0, W, H);
+    await np.render({ canvasContext: oc, viewport: np.getViewport({ scale: W / np.getViewport({ scale: 1 }).width }) }).promise;
+    const a = oldImg.data, b = oc.getImageData(0, 0, W, H).data, out = ctx.createImageData(W, H), o = out.data;
+    const dk = (d, i) => d[i + 3] > 0 && d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11 < 170;
+    let gone = 0, added = 0;
+    for (let i = 0; i < a.length; i += 4) {
+      const x = dk(a, i), y = dk(b, i);
+      const c = x && y ? [150, 150, 150] : x ? (gone++, [224, 49, 49]) : y ? (added++, [28, 126, 214]) : [255, 255, 255];
+      o[i] = c[0]; o[i + 1] = c[1]; o[i + 2] = c[2]; o[i + 3] = 255;
+    }
+    ctx.putImageData(out, 0, 0);
+    S.compare = { name: file.name, pdf, bytes, page: pg };
+    $('#cmpTxt').innerHTML = `${esc(sheetName(S.pageNum))} vs <b>${esc(file.name)}</b> p${pg}`;
+    $('#cmpBar').hidden = false;
+    toast(gone + added ? 'Cambios marcados en rojo y azul' : 'No encontré diferencias en esta hoja');
+  } catch (err) { console.error(err); toast('No se pudo comparar: ' + err.message); }
+}
+function endCompare() { S.compare = null; $('#cmpBar').hidden = true; }
+$('#cmpExit').addEventListener('click', () => { endCompare(); render(); });
+$('#cmpUse').addEventListener('click', async () => {
+  const c = S.compare, sh = S.sheets[S.pageNum - 1]; if (!c || !sh) return;
+  S.pdfs[c.name] = c.pdf; S.pdfBytes[c.name] = c.bytes;
+  sh.doc = c.name; sh.page = c.page; sh.rev = (sh.rev || 0) + 1;
+  endCompare(); await gotoPage(S.pageNum); toast('La hoja ahora usa la revisión. Tus mediciones se conservaron.');
+});
+
+/* ---------- Export the drawings with markups ---------- */
+const pdfSafe = t => String(t == null ? '' : t).replace(/[^\x20-\x7E\xA0-\xFF–—‘’“”•…]/g, '?');
+const hexRgb = hx => { const m = /^#?([0-9a-f]{6})$/i.exec(hx || '') || [0, 'e03131']; const n = parseInt(m[1], 16); return PDFLib.rgb((n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255); };
+function cloudPoly(a, b) {
+  const x1 = Math.min(a[0], b[0]), y1 = Math.min(a[1], b[1]), x2 = Math.max(a[0], b[0]), y2 = Math.max(a[1], b[1]);
+  const pts = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]], arc = Math.max(6, Math.min(x2 - x1, y2 - y1) / 6), out = [];
+  for (let i = 0; i < 4; i++) {
+    const p = pts[i], q = pts[(i + 1) % 4], L = dist(p, q), n = Math.max(1, Math.round(L / arc)), ux = (q[0] - p[0]) / L, uy = (q[1] - p[1]) / L;
+    for (let j = 0; j < n; j++) {
+      const sx = p[0] + (q[0] - p[0]) * j / n, sy = p[1] + (q[1] - p[1]) * j / n, rr = L / n / 2, cx = sx + ux * rr, cy = sy + uy * rr;
+      for (let k = 0; k <= 6; k++) { const t = Math.PI + Math.PI * k / 6; const vx = ux * Math.cos(t) - uy * Math.sin(t), vy = uy * Math.cos(t) + ux * Math.sin(t); out.push([cx + rr * vx, cy + rr * vy]); }
+    }
+  }
+  return out;
+}
+async function exportMarkedPdf() {
+  if (!S.pdf) { toast('Abre un plano primero'); return; }
+  if (!window.PDFLib) { toast('No se cargó la librería de PDF'); return; }
+  toast('Generando PDF…');
+  try {
+    const { PDFDocument, StandardFonts, rgb } = PDFLib;
+    const out = await PDFDocument.create(), font = await out.embedFont(StandardFonts.Helvetica), bold = await out.embedFont(StandardFonts.HelveticaBold);
+    const srcs = {}, red = rgb(0.88, 0.19, 0.19);
+    for (let n = 1; n <= S.sheets.length; n++) {
+      const sh = S.sheets[n - 1]; if (!S.pdfBytes[sh.doc]) continue;
+      const src = srcs[sh.doc] || (srcs[sh.doc] = await PDFDocument.load(S.pdfBytes[sh.doc], { ignoreEncryption: true }));
+      const [pg] = await out.copyPages(src, [sh.page - 1]); out.addPage(pg);
+      const vp = (await S.pdfs[sh.doc].getPage(sh.page)).getViewport({ scale: 1 });
+      const P = q => vp.convertToPdfPoint(q[0], q[1]);
+      const path = (pts, close) => pts.map((q, i) => { const [x, y] = P(q); return (i ? 'L' : 'M') + x + ',' + (-y); }).join(' ') + (close ? ' Z' : '');
+      const line = (a, b, color, w) => { const [x1, y1] = P(a), [x2, y2] = P(b); pg.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: w || 1.5, color }); };
+      const text = (t, q, size, color, f) => { const [x, y] = P(q); pg.drawText(pdfSafe(t), { x, y, size, font: f || font, color }); };
+      const legend = new Map();
+      for (const it of S.items.filter(x => x.page === n)) {
+        const c = condById(it.cond); const col = c ? hexRgb(c.color) : red;
+        if (c && isMeasure(it)) { const b = breakdown(it); const L = legend.get(c.id) || { c, q: 0, unit: b.unit, ok: b.ok }; L.q += b.q; legend.set(c.id, L); }
+        if (it.type === 'linear') { for (let i = 1; i < it.points.length; i++) line(it.points[i - 1], it.points[i], col, 2); const l = it.points[it.points.length - 1]; text(fmtQty(breakdown(it)), [l[0] + 4, l[1] - 4], 7, col); }
+        else if (it.type === 'area') {
+          const sgn = pts => pts.reduce((s, q, i) => { const r2 = pts[(i + 1) % pts.length]; return s + q[0] * r2[1] - r2[0] * q[1]; }, 0);
+          const outer = it.points, rings = [outer, ...(it.holes || []).map(h => Math.sign(sgn(h)) === Math.sign(sgn(outer)) ? [...h].reverse() : h)];
+          pg.drawSvgPath(rings.map(r2 => path(r2, true)).join(' '), { x: 0, y: 0, color: col, opacity: 0.2, borderColor: col, borderWidth: 1.5 });
+          text(fmtQty(breakdown(it)), centroid(outer), 7, col);
+        } else if (it.type === 'count') it.points.forEach((q, i) => { const [x, y] = P(q); pg.drawCircle({ x, y, size: 4, color: col, borderColor: rgb(1, 1, 1), borderWidth: 0.8 }); pg.drawText(String(i + 1), { x: x + 5, y: y + 3, size: 6, font, color: col }); });
+        else if (it.type === 'cloud') pg.drawSvgPath(path(cloudPoly(it.points[0], it.points[1]), true), { x: 0, y: 0, borderColor: red, borderWidth: 1.5 });
+        else if (it.type === 'highlight') pg.drawSvgPath(path([[it.points[0][0], it.points[0][1]], [it.points[1][0], it.points[0][1]], [it.points[1][0], it.points[1][1]], [it.points[0][0], it.points[1][1]]], true), { x: 0, y: 0, color: rgb(0.98, 0.69, 0.02), opacity: 0.35 });
+        else if (it.type === 'arrow') { const [a, b] = it.points, ang = Math.atan2(b[1] - a[1], b[0] - a[0]); line(a, b, red, 1.5); line(b, [b[0] - 10 * Math.cos(ang - 0.4), b[1] - 10 * Math.sin(ang - 0.4)], red, 1.5); line(b, [b[0] - 10 * Math.cos(ang + 0.4), b[1] - 10 * Math.sin(ang + 0.4)], red, 1.5); }
+        else if (it.type === 'callout') { const [a, b] = it.points; line(a, b, red, 1.2); const w = font.widthOfTextAtSize(pdfSafe(it.text), 8) + 8; const bx = b[0] >= a[0] ? b[0] : b[0] - w; pg.drawSvgPath(path([[bx, b[1] - 7], [bx + w, b[1] - 7], [bx + w, b[1] + 7], [bx, b[1] + 7]], true), { x: 0, y: 0, color: rgb(1, 1, 1), borderColor: red, borderWidth: 1 }); text(it.text, [bx + 4, b[1] + 3], 8, red); }
+        else if (it.type === 'text') text(it.text, it.points[0], 10, red, bold);
+        else if (it.type === 'stamp') { const [lbl, sc] = STAMPS[it.stamp] || STAMPS.reviewed; const col2 = hexRgb(sc), w = bold.widthOfTextAtSize(lbl, 14) + 16, q = it.points[0]; pg.drawSvgPath(path([[q[0] - w / 2, q[1] - 16], [q[0] + w / 2, q[1] - 16], [q[0] + w / 2, q[1] + 14], [q[0] - w / 2, q[1] + 14]], true), { x: 0, y: 0, borderColor: col2, borderWidth: 2 }); text(lbl, [q[0] - w / 2 + 8, q[1] + 1], 14, col2, bold); text(it.date || '', [q[0] - w / 2 + 8, q[1] + 10], 6, col2); }
+        else if (it.type === 'photo' && it.img) { try { const im = await out.embedJpg(it.img); const w = 140, h = w * im.height / im.width; const [x, y] = P(it.points[0]); pg.drawImage(im, { x, y: y - h, width: w, height: h }); } catch (e) { } }
+      }
+      // legend box in the upper-left corner
+      if (legend.size) {
+        const rows = [...legend.values()], x0 = 14, y0 = 14, w = 230, rh = 11, h = 16 + rows.length * rh;
+        pg.drawSvgPath(path([[x0, y0], [x0 + w, y0], [x0 + w, y0 + h], [x0, y0 + h]], true), { x: 0, y: 0, color: rgb(1, 1, 1), opacity: 0.92, borderColor: rgb(0.4, 0.4, 0.45), borderWidth: 0.6 });
+        text('TAKEOFF - ' + sh.name, [x0 + 6, y0 + 10], 7, rgb(0.1, 0.1, 0.15), bold);
+        rows.forEach((L, i) => { const y = y0 + 20 + i * rh; pg.drawSvgPath(path([[x0 + 6, y - 6], [x0 + 13, y - 6], [x0 + 13, y + 1], [x0 + 6, y + 1]], true), { x: 0, y: 0, color: hexRgb(L.c.color) }); text(L.c.name, [x0 + 17, y], 6.5, rgb(0.1, 0.1, 0.15)); text(L.ok ? fmtQty({ ...L, ok: true }) : 'not scaled', [x0 + 170, y], 6.5, rgb(0.1, 0.1, 0.15)); });
+      }
+    }
+    const bytes = await out.save();
+    download(new Blob([bytes], { type: 'application/pdf' }), baseName() + '_markups.pdf');
+    toast('PDF con marcas descargado');
+  } catch (err) { console.error(err); toast('No se pudo generar el PDF: ' + err.message); }
+}
+$('#btnPdfOut').addEventListener('click', exportMarkedPdf);
+$('#btnSnap').addEventListener('click', () => S.pdf && toggleSnap());
 $('#zoomIn').addEventListener('click', () => setZoom(S.zoom * 1.25));
 $('#zoomOut').addEventListener('click', () => setZoom(S.zoom / 1.25));
 $('#zoomFit').addEventListener('click', () => S.pdf && fitZoom());
@@ -1229,7 +1807,36 @@ const UI_EN = {
   '+ Agregar material': '+ Add material', 'Factor': 'Factor', 'Por': 'Per', 'Quitar': 'Remove',
   'por unidad medida (LF/SF/EA)': 'per measured unit (LF/SF/EA)', 'por unidad de lámina (ft²)': 'per sheet metal SF', 'por soporte': 'per hanger', 'por codo 90°': 'per 90° elbow',
   'por codo 45°': 'per 45° elbow', 'por codo (cualquiera)': 'per elbow (any)', 'por tramo/pieza': 'per stock piece', 'por drop/riser': 'per drop/riser',
-  'La lista de materiales aparece cuando tengas mediciones con escala.': 'The bill of materials appears once you have scaled takeoffs.'
+  'La lista de materiales aparece cuando tengas mediciones con escala.': 'The bill of materials appears once you have scaled takeoffs.',
+  'Estimado': 'Estimate', 'Horas': 'Hours', 'Precio': 'Price', 'h/u': 'hr/unit', 'Mano de obra (h por unidad)': 'Labor (hr per unit)', 'Horas de mano de obra por unidad': 'Labor hours per unit',
+  'Tarifa mano de obra ($/h)': 'Labor rate ($/hr)', 'Impuesto materiales (%)': 'Material tax (%)', 'Overhead (%)': 'Overhead (%)', 'Utilidad (%)': 'Profit (%)',
+  'Datos de la propuesta…': 'Proposal details…', 'Generar propuesta': 'Create proposal', 'Exportar lista de precios': 'Export price list', 'Importar lista de precios': 'Import price list',
+  'Descarga un Excel con todos los materiales para llenar precios y horas': 'Download an Excel file with every material to fill in prices and hours', 'Carga precios y horas desde Excel': 'Load prices and hours from Excel',
+  'Materiales': 'Bill of Materials', 'Mano de obra': 'Labor', 'Costo directo': 'Direct cost', 'Overhead': 'Overhead', 'Utilidad': 'Profit', 'Impuesto': 'Tax', 'Total de la oferta': 'Total bid',
+  'Sin mediciones con escala.': 'No scaled takeoffs.', 'Costo de materiales': 'Material cost', 'Datos de la propuesta': 'Proposal details', 'Empresa': 'Company', 'Contacto / licencia': 'Contact / license', 'Estimador': 'Estimator', 'Cliente': 'Client',
+  'Proyecto': 'Project', 'Dirección de la obra': 'Job address', 'Fecha de la oferta': 'Bid date', 'Incluye': 'Inclusions', 'Excluye': 'Exclusions', 'Desglose': 'Breakdown',
+  'Mostrar montos por sistema': 'Show amounts by system', 'Solo monto total': 'Lump sum only', 'General contractor': 'General contractor',
+  'El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio.': 'The browser blocked the window. Allow pop-ups for this site.',
+  'Lista de precios exportada. Llena precios y horas y vuelve a importarla.': 'Price list exported. Fill in prices and hours, then import it back.',
+  'No encontré materiales con el mismo nombre': 'No materials with matching names were found',
+  'Guardando…': 'Saving…', 'Guardar el proyecto con sus planos en un archivo .takeoff (Ctrl+S). Guárdalo en tu carpeta de OneDrive o Dropbox.': 'Save the project and its drawings to a .takeoff file (Ctrl+S). Keep it in your OneDrive or Dropbox folder.',
+  'Abrir un proyecto .takeoff': 'Open a .takeoff project', 'Proyecto descargado. Muévelo a tu carpeta de OneDrive o Dropbox.': 'Project downloaded. Move it to your OneDrive or Dropbox folder.',
+  'PDF con marcas': 'Marked-up PDF', 'Comparar revisión': 'Compare revision', 'Descargar los planos con todas las marcas y una leyenda': 'Download the drawings with every markup and a legend',
+  'Comparar esta hoja con otra revisión del plano': 'Compare this sheet with another revision of the drawing', 'Anotaciones de revisión': 'Review markups', 'Anotar…': 'Markup…',
+  'Nube (R)': 'Cloud (R)', 'Texto (T)': 'Text (T)', 'Flecha (W)': 'Arrow (W)', 'Callout (Q)': 'Callout (Q)', 'Resaltar (H)': 'Highlight (H)', 'Sello (M)': 'Stamp (M)', 'Foto (F)': 'Photo (F)',
+  'Flecha': 'Arrow', 'Callout': 'Callout', 'Resaltar': 'Highlight', 'Sello': 'Stamp', 'Foto': 'Photo', 'Cerrar': 'Close',
+  'Clic en el inicio y luego en la punta de la flecha': 'Click the start, then the arrow tip', 'Clic en el punto a señalar y luego donde va el texto': 'Click the point to call out, then where the text goes',
+  'Clic en dos esquinas opuestas del área a resaltar': 'Click two opposite corners of the area to highlight', 'Clic donde va el sello': 'Click where the stamp goes', 'Clic donde va la foto y elige la imagen': 'Click where the photo goes and pick the image',
+  'Foto agregada. Doble clic en el ícono para verla.': 'Photo added. Double-click the icon to view it.', 'No se pudo leer la imagen': 'Could not read the image',
+  'Solo en la versión actual': 'Only in the current version', 'Nuevo en la revisión': 'New in the revision', 'Usar la revisión en esta hoja': 'Use the revision on this sheet', 'Salir': 'Exit',
+  'Cambios marcados en rojo y azul': 'Changes marked in red and blue', 'No encontré diferencias en esta hoja': 'No differences found on this sheet',
+  'La hoja ahora usa la revisión. Tus mediciones se conservaron.': 'The sheet now uses the revision. Your takeoffs were kept.', 'Generando PDF…': 'Creating PDF…', 'PDF con marcas descargado': 'Marked-up PDF downloaded',
+  'No se cargó la librería de PDF': 'The PDF library did not load',
+  'Hojas': 'Sheets', '+ PDF': '+ PDF', 'Agregar otro PDF al proyecto': 'Add another PDF to the project', 'Nombre de la hoja': 'Sheet name', 'Deducir': 'Deduct', 'Snap': 'Snap',
+  'Deducir un hueco de un área (D)': 'Deduct an opening from an area (D)', 'Ajustar a líneas del plano y a puntos de otras mediciones (S)': 'Snap to drawing lines and to points of other takeoffs (S)',
+  'Dibuja el hueco dentro de un área: clic en cada vértice, doble clic o Enter para restarlo': 'Draw the opening inside an area: click each corner, double-click or Enter to subtract it',
+  'Dibuja la deducción dentro de un área medida': 'Draw the deduction inside a measured area', 'Deducción restada del área': 'Deduction subtracted from the area',
+  'Snap activado': 'Snap on', 'Snap desactivado': 'Snap off', 'Marcas': 'Markups', 'Opacidad de las marcas': 'Markup opacity', 'Mostrar en el plano': 'Show on drawing', 'Ocultar en el plano': 'Hide on drawing', 'Arrastra para cambiar el tamaño': 'Drag to resize'
 };
 const UI_PATTERNS = [
   [/^(Lineal|Área|Conteo)( · .*)$/, (m, a, b) => UI_EN[a] + b],
@@ -1237,12 +1844,23 @@ const UI_PATTERNS = [
   [/^Actual: (.*)$/, (m, a) => 'Current: ' + trUI(a)],
   [/^([\d.,]+) pza$/, (m, a) => a + ' EA'],
   [/^\((\d+) sin escala\)$/, (m, a) => `(${a} not scaled)`],
+  [/^No se pudo (comparar|generar el PDF): (.*)$/, (m, a, b) => (a === 'comparar' ? 'Could not compare: ' : 'Could not create the PDF: ') + b],
+  [/^Guardado (.*)$/, (m, a) => 'Saved ' + a],
+  [/^Proyecto guardado en (.*)$/, (m, a) => 'Project saved to ' + a],
+  [/^Proyecto abierto con (\d+) plano\(s\)$/, (m, a) => `Project opened with ${a} drawing(s)`],
+  [/^No se pudo guardar el archivo: (.*)$/, (m, a) => 'Could not save the file: ' + a],
+  [/^Falta abrir: (.*)\. Usa “\+ PDF”\.$/, (m, a) => `Still need to open: ${a}. Use “+ PDF”.`],
+  [/^Abre “(.*)” con “\+ PDF” para ver esta hoja$/, (m, a) => `Open “${a}” with “+ PDF” to see this sheet`],
+  [/^(.*) · p(\d+)( · sin escala)?$/, (m, a, b, c) => `${a} · p${b}${c ? ' · not scaled' : ''}`],
   [/^(\d+) medición\(es\)( · sin escala)?$/, (m, a, b) => `${a} takeoff(s)${b ? ' · not scaled' : ''}`],
   [/^(.*) · (\d+) página\(s\)$/, (m, a, b) => `${a} · ${b} sheet(s)`],
   [/^Escala (.+) aplicada( a todas las páginas)?$/, (m, a, b) => `Scale ${trUI(a)} applied${b ? ' to all sheets' : ''}`],
   [/^Aplicar escala (.+)$/, (m, a) => 'Apply scale ' + a],
   [/^Precio por (pieza|\S+), se multiplica por la cantidad con desperdicio\.$/, (m, a) => `Price per ${a === 'pieza' ? 'each' : a}, multiplied by the quantity with waste.`],
   [/^No tienes condiciones de tipo (\S+)\. Crea una para empezar a medir\.$/, (m, a) => `You have no ${({ lineal: 'linear', 'área': 'area', conteo: 'count' })[a] || a} conditions. Create one to start measuring.`],
+  [/^(\d+) material\(es\) actualizados$/, (m, a) => `${a} material(s) updated`],
+  [/^(Impuesto|Overhead|Utilidad) \((.*)\)$/, (m, a, b) => `${UI_EN[a]} (${b})`],
+  [/^Mano de obra \((.*) h × (.*)\)$/, (m, a, b) => `Labor (${a} hr × ${b})`],
   [/^(\d+) condición\(es\) importadas o actualizadas$/, (m, a) => `${a} condition(s) imported or updated`],
   [/^No se pudo abrir el PDF: (.*)$/, (m, a) => 'Could not open the PDF: ' + a],
   [/^No se pudo leer el archivo: (.*)$/, (m, a) => 'Could not read the file: ' + a],
@@ -1290,8 +1908,544 @@ function setUiLang(l) {
   trNode(document.body);
 }
 
+/* ---------- Trades, sheet disciplines & auto-detection ---------- */
+const TRADES = [
+  { id: 'mech', es: 'HVAC / Mecánico', en: 'HVAC / Mechanical', pal: ['#e8590c', '#1971c2', '#5c940d', '#9c36b5', '#0c8599'] },
+  { id: 'plumb', es: 'Plomería', en: 'Plumbing', pal: ['#2b8a3e', '#c2255c', '#495057', '#5f3dc4', '#e64980'] },
+  { id: 'fire', es: 'Protección contra incendios', en: 'Fire Protection', pal: ['#c92a2a', '#e03131', '#a61e4d', '#f03e3e'] },
+  { id: 'elec', es: 'Eléctrico', en: 'Electrical', pal: ['#f59f00', '#e67700', '#fab005', '#d9480f', '#862e9c'] },
+  { id: 'lowv', es: 'Bajo voltaje / Alarma', en: 'Low Voltage / Fire Alarm', pal: ['#1098ad', '#0b7285', '#3bc9db', '#c92a2a'] },
+  { id: 'drywall', es: 'Muros y drywall', en: 'Drywall & Framing', pal: ['#868e96', '#495057', '#5c7cfa', '#7048e8'] },
+  { id: 'finish', es: 'Acabados (pisos, plafones, pintura)', en: 'Finishes (floors, ceilings, paint)', pal: ['#748ffc', '#20c997', '#f783ac', '#94d82d', '#ff922b'] },
+  { id: 'doors', es: 'Puertas y ventanas', en: 'Doors & Windows', pal: ['#7950f2', '#ae3ec9', '#4263eb'] },
+  { id: 'roof', es: 'Techos', en: 'Roofing', pal: ['#0b7285', '#364fc7', '#5c940d'] },
+  { id: 'conc', es: 'Concreto y estructura', en: 'Concrete & Structural', pal: ['#868e96', '#495057', '#e8590c', '#1864ab'] },
+  { id: 'site', es: 'Obra civil / Sitio', en: 'Civil / Site', pal: ['#343a40', '#2b8a3e', '#1971c2', '#c92a2a', '#e67700'] }
+];
+const tradeById = id => TRADES.find(t => t.id === id);
+const tradeName = id => { const t = tradeById(id); return t ? t.es : ''; };
+// Sheet disciplines (US National CAD Standard designators) and the trades each one feeds
+const DISCS = { mech: ['mech'], plumb: ['plumb'], fire: ['fire'], elec: ['elec'], lowv: ['lowv'], arch: ['drywall', 'finish', 'doors', 'roof'], struct: ['conc'], civil: ['site'] };
+const DISC_LABEL = { mech: 'Mecánico', plumb: 'Plomería', fire: 'Incendios', elec: 'Eléctrico', lowv: 'Bajo voltaje', arch: 'Arquitectónico', struct: 'Estructural', civil: 'Civil', gen: 'General' };
+const DISC_PREFIX = { M: 'mech', H: 'mech', MH: 'mech', MP: 'mech', MD: 'mech', ME: 'mech', P: 'plumb', PL: 'plumb', PD: 'plumb', FP: 'fire', F: 'fire', FS: 'fire',
+  E: 'elec', EP: 'elec', EL: 'elec', ES: 'elec', ED: 'elec', T: 'lowv', TC: 'lowv', TN: 'lowv', TY: 'lowv', LV: 'lowv', FA: 'lowv', Y: 'lowv',
+  A: 'arch', AD: 'arch', AE: 'arch', I: 'arch', ID: 'arch', Q: 'arch', D: 'arch', S: 'struct', SF: 'struct', C: 'civil', CS: 'civil', CG: 'civil', CU: 'civil', CP: 'civil', L: 'civil', LS: 'civil', V: 'civil', G: 'gen', GI: 'gen', CV: 'gen' };
+const DISC_WORDS = [['fire', /FIRE PROTECTION|SPRINKLER/g], ['lowv', /FIRE ALARM|TELECOM|TECHNOLOGY|LOW VOLTAGE|SECURITY PLAN|DATA PLAN/g], ['plumb', /PLUMBING|SANITARY|DOMESTIC WATER|WASTE AND VENT/g],
+  ['mech', /MECHANICAL|HVAC|DUCTWORK/g], ['elec', /ELECTRICAL|LIGHTING PLAN|POWER PLAN/g], ['struct', /STRUCTURAL|FOUNDATION PLAN|FRAMING PLAN/g],
+  ['civil', /CIVIL|GRADING|UTILITY PLAN|SITE PLAN|EROSION/g], ['arch', /ARCHITECTURAL|REFLECTED CEILING|FINISH PLAN|DOOR SCHEDULE/g]];
+function discFromName(n) {
+  const m = /^([A-Z]{1,3})[-.\s]?\d/.exec(String(n || '').toUpperCase().trim());
+  if (!m) return null;
+  return DISC_PREFIX[m[1]] || DISC_PREFIX[m[1][0]] || null;
+}
+function discFromText(text) {
+  let best = null, bn = 0;
+  for (const [d, re] of DISC_WORDS) { const n = (text.match(re) || []).length; if (n > bn) { bn = n; best = d; } }
+  return best;
+}
+const curSheet = () => S.sheets[S.pageNum - 1];
+function activeTrades() {
+  const f = S.tradeFilter || 'auto';
+  if (f === 'all') return null;
+  if (f !== 'auto') return [f];
+  const sh = curSheet(), d = sh && sh.disc;
+  return d && DISCS[d] ? DISCS[d] : null;
+}
+function visibleConds() {
+  const t = activeTrades();
+  const list = t ? S.conditions.filter(c => !c.trade || t.includes(c.trade)) : S.conditions;
+  return list.length ? list : S.conditions;
+}
+function guessTrade(c) {
+  const s = (c.system || '') + ' ' + (c.name || '');
+  if (/HVAC|Insulation|Chilled|Heating|Refrig|Duct|Diffuser|Grille|VAV|Damper/i.test(s)) return 'mech';
+  if (/Water|Sanitary|Storm|Vent|Gas|Plumb|Copper|PEX|PVC|No-Hub|Valve/i.test(s)) return 'plumb';
+  return '';
+}
+
+// Library of typical US takeoff items for every trade (starting points: set your own prices and labor)
+function tradePresets() {
+  const A = (name, f, base, unit, lab) => ({ name, f, base, unit, price: 0, lab: lab || 0 });
+  const out = [];
+  const add = (trade, list) => list.forEach((o, i) => out.push(Object.assign({ id: newId('c'), type: 'count', color: tradeById(trade).pal[i % tradeById(trade).pal.length], system: '', material: '', size: '', shape: 'none', w: 0, h: 0, d: 0, gauge: 'auto', piece: 0, hanger: 0, waste: 0, price: 0, labor: 0, ht: 0, th: 0, tags: [], asm: [] }, o, { trade })));
+  const box = [A('Device box 4" sq. w/ mud ring', 1, 'qty', 'EA', 0.25), A('Cover plate', 1, 'qty', 'EA', 0.05)];
+  const studWall = (stud, ga) => [A(`Metal stud ${stud} ${ga}`, 0.8, 'qty', 'EA', 0.12), A(`Track ${stud} ${ga}`, 2, 'qty', 'LF', 0.02), A('Gypsum board 5/8" Type X', 2.1, 'wall', 'SF', 0.012),
+    A('Tape & finish Level 4', 2, 'wall', 'SF', 0.016), A('Drywall screws 1-1/4"', 2, 'wall', 'EA', 0), A('Joint compound', 0.01, 'wall', 'GAL', 0), A(`Sound batt insulation ${stud}`, 1, 'wall', 'SF', 0.005)];
+  const door = (frame, leaves) => [A(`Hollow metal frame ${frame}`, 1, 'qty', 'EA', 1.5), A('Hinges 4-1/2" (each)', 3 * leaves, 'qty', 'EA', 0.1), A('Lockset / latchset', 1, 'qty', 'EA', 0.75), A('Door closer', leaves, 'qty', 'EA', 0.75), A('Wall/floor stop', leaves, 'qty', 'EA', 0.1)];
+  add('mech', [
+    { name: 'Rooftop Unit (RTU)', system: 'HVAC Equipment', material: 'Packaged unit', tags: ['RTU'], labor: 16, asm: [A('Roof curb', 1, 'qty', 'EA', 4), A('Condensate trap & drain', 1, 'qty', 'EA', 1)] },
+    { name: 'Air Handling Unit (AHU)', system: 'HVAC Equipment', material: 'Air handler', tags: ['AHU'], labor: 40 },
+    { name: 'Fan Coil Unit', system: 'HVAC Equipment', material: 'Fan coil', tags: ['FCU'], labor: 6 },
+    { name: 'Split System / Heat Pump', system: 'HVAC Equipment', material: 'Split system', tags: ['HP', 'CU', 'ACCU', 'AC'], labor: 12, asm: [A('Equipment pad', 1, 'qty', 'EA', 1)] },
+    { name: 'Exhaust Fan', system: 'HVAC Exhaust', material: 'Exhaust fan', tags: ['EF'], labor: 3 },
+    { name: 'Unit Heater', system: 'HVAC Heating', material: 'Unit heater', tags: ['UH', 'EUH', 'CUH'], labor: 3 },
+    { name: 'Exhaust Grille', system: 'HVAC Exhaust', material: 'Aluminum', size: '12x12', tags: ['EG', 'EXG'], labor: 0.6 },
+    { name: 'Thermostat', system: 'HVAC Controls', material: 'Programmable', labor: 1 },
+    { name: 'Refrigerant Line Set 3/8 x 7/8', type: 'linear', system: 'Refrigerant', material: 'ACR copper', size: '3/8 x 7/8', piece: 50, hanger: 6, waste: 5, labor: 0.12, asm: [A('Line set insulation 7/8"', 1, 'qty', 'LF', 0.02), A('Line set support', 1, 'hanger', 'EA', 0.15)] },
+    { name: 'Condensate Drain PVC 3/4"', type: 'linear', system: 'Condensate', material: 'PVC Sch 40', size: '3/4"', piece: 10, hanger: 4, waste: 5, labor: 0.08, asm: [A('Elbow 90° 3/4" PVC', 1, 'el90', 'EA', 0.15), A('Pipe strap 3/4"', 1, 'hanger', 'EA', 0.05)] }
+  ]);
+  add('plumb', [
+    { name: 'Water Closet', system: 'Plumbing Fixtures', material: 'Vitreous china', tags: ['WC'], labor: 3, asm: [A('Angle stop & supply 3/8"', 1, 'qty', 'EA', 0.3), A('Wax ring & bolts', 1, 'qty', 'EA', 0)] },
+    { name: 'Lavatory', system: 'Plumbing Fixtures', material: 'Vitreous china', tags: ['LAV'], labor: 2.5, asm: [A('Angle stop & supply 3/8"', 2, 'qty', 'EA', 0.3), A('P-trap 1-1/4"', 1, 'qty', 'EA', 0.4)] },
+    { name: 'Urinal', system: 'Plumbing Fixtures', material: 'Vitreous china', tags: ['UR'], labor: 3 },
+    { name: 'Sink', system: 'Plumbing Fixtures', material: 'Stainless steel', tags: ['SK'], labor: 3, asm: [A('Angle stop & supply 3/8"', 2, 'qty', 'EA', 0.3), A('P-trap 1-1/2"', 1, 'qty', 'EA', 0.4)] },
+    { name: 'Mop Sink', system: 'Plumbing Fixtures', material: 'Molded stone', tags: ['MS', 'MSB'], labor: 3 },
+    { name: 'Shower', system: 'Plumbing Fixtures', material: 'Valve & trim', tags: ['SH', 'SHR'], labor: 4 },
+    { name: 'Drinking Fountain', system: 'Plumbing Fixtures', material: 'Bi-level EWC', tags: ['DF', 'EWC'], labor: 3 },
+    { name: 'Floor Drain', system: 'Sanitary', material: 'Cast iron body', tags: ['FD'], labor: 2, asm: [A('Trap primer connection', 1, 'qty', 'EA', 0.5)] },
+    { name: 'Cleanout', system: 'Sanitary', material: 'Cast iron', tags: ['CO', 'FCO', 'WCO', 'GCO'], labor: 1 },
+    { name: 'Roof Drain', system: 'Storm', material: 'Cast iron body', tags: ['RD', 'OD'], labor: 4 },
+    { name: 'Water Heater', system: 'Domestic Hot Water', material: 'Water heater', tags: ['WH', 'EWH', 'GWH'], labor: 6, asm: [A('Expansion tank', 1, 'qty', 'EA', 0.75), A('T&P drain line', 1, 'qty', 'EA', 0.5)] },
+    { name: 'Hose Bibb', system: 'Domestic Cold Water', material: 'Frost-free', tags: ['HB', 'WHY'], labor: 1 },
+    { name: 'Gas Pipe 1" Black Steel', type: 'linear', system: 'Natural Gas', material: 'Black steel Sch 40', size: '1"', piece: 21, hanger: 8, waste: 5, labor: 0.22, asm: [A('Elbow 90° 1" black', 1, 'el90', 'EA', 0.4), A('Coupling 1" black', 1, 'piece', 'EA', 0.3), A('Clevis hanger 1"', 1, 'hanger', 'EA', 0.3)] }
+  ]);
+  add('fire', [
+    { name: 'Sprinkler Branch 1" Sch 40', type: 'linear', system: 'Wet Sprinkler', material: 'Black steel Sch 40 threaded', size: '1"', piece: 21, hanger: 12, waste: 5, labor: 0.14, asm: [A('Elbow 90° 1" threaded', 1, 'el90', 'EA', 0.3), A('Coupling 1" threaded', 1, 'piece', 'EA', 0.2), A('Hanger ring 1"', 1, 'hanger', 'EA', 0.25), A('Threaded rod 3/8"', 2, 'hanger', 'LF', 0)] },
+    { name: 'Sprinkler Main 4" Sch 10', type: 'linear', system: 'Wet Sprinkler', material: 'Black steel Sch 10 grooved', size: '4"', piece: 21, hanger: 15, waste: 5, labor: 0.3, asm: [A('Grooved elbow 90° 4"', 1, 'el90', 'EA', 0.6), A('Grooved coupling 4"', 1, 'piece', 'EA', 0.5), A('Clevis hanger 4"', 1, 'hanger', 'EA', 0.35), A('Threaded rod 1/2"', 2, 'hanger', 'LF', 0)] },
+    { name: 'Sprinkler Head Pendent', system: 'Wet Sprinkler', material: 'Quick response', labor: 0.5, asm: [A('Sprig / arm-over 1"', 1, 'qty', 'EA', 0.3), A('Escutcheon', 1, 'qty', 'EA', 0)] },
+    { name: 'Sprinkler Head Upright', system: 'Wet Sprinkler', material: 'Quick response', labor: 0.4 },
+    { name: 'Sprinkler Head Sidewall', system: 'Wet Sprinkler', material: 'Quick response', labor: 0.5 },
+    { name: 'Fire Department Connection', system: 'Fire Protection', material: 'Storz / 2-1/2"', tags: ['FDC'], labor: 6 },
+    { name: 'Sprinkler Riser Assembly', system: 'Fire Protection', material: 'Alarm check valve', tags: ['FSR', 'RISER'], labor: 16 },
+    { name: 'Standpipe Hose Valve', system: 'Standpipe', material: '2-1/2" angle valve', tags: ['FHV'], labor: 3 },
+    { name: 'Fire Extinguisher Cabinet', system: 'Fire Protection', material: 'Semi-recessed', tags: ['FEC', 'FE'], labor: 1.5 }
+  ]);
+  add('elec', [
+    { name: 'EMT 3/4"', type: 'linear', system: 'Branch Power', material: 'EMT', size: '3/4"', piece: 10, hanger: 10, waste: 5, labor: 0.045, asm: [A('EMT coupling 3/4"', 1, 'piece', 'EA', 0.03), A('EMT 90° elbow 3/4"', 1, 'el90', 'EA', 0.15), A('EMT strap 3/4"', 1, 'hanger', 'EA', 0.05), A('THHN #12 Cu', 3, 'qty', 'LF', 0.006)] },
+    { name: 'EMT 1"', type: 'linear', system: 'Feeders', material: 'EMT', size: '1"', piece: 10, hanger: 10, waste: 5, labor: 0.055, asm: [A('EMT coupling 1"', 1, 'piece', 'EA', 0.04), A('EMT 90° elbow 1"', 1, 'el90', 'EA', 0.2), A('EMT strap 1"', 1, 'hanger', 'EA', 0.05), A('THHN #10 Cu', 4, 'qty', 'LF', 0.007)] },
+    { name: 'MC Cable 12/2', type: 'linear', system: 'Branch Power', material: 'MC cable', size: '12/2', piece: 250, hanger: 6, waste: 10, labor: 0.025, asm: [A('MC cable support', 1, 'hanger', 'EA', 0.02)] },
+    { name: 'Duplex Receptacle 20A', system: 'Branch Power', material: 'Spec grade', tags: [], labor: 0.45, asm: box },
+    { name: 'GFCI Receptacle', system: 'Branch Power', material: 'Spec grade', labor: 0.55, asm: box },
+    { name: 'Single Pole Switch', system: 'Lighting Controls', material: 'Spec grade', labor: 0.4, asm: box },
+    { name: 'Occupancy Sensor', system: 'Lighting Controls', material: 'Dual technology', tags: ['OS'], labor: 0.6 },
+    { name: 'LED Troffer 2x4', system: 'Lighting', material: 'LED', size: '2x4', labor: 1, asm: [A('Fixture whip 6\' MC', 1, 'qty', 'EA', 0.25), A('Support wire', 2, 'qty', 'EA', 0.05)] },
+    { name: 'LED Downlight 6"', system: 'Lighting', material: 'LED', size: '6"', labor: 0.75 },
+    { name: 'Exit Sign', system: 'Lighting', material: 'LED w/ battery', labor: 0.75 },
+    { name: 'Emergency Light', system: 'Lighting', material: 'LED w/ battery', tags: ['EM'], labor: 0.75 },
+    { name: 'Panelboard 225A', system: 'Distribution', material: '42 circuit', tags: ['LP', 'PP', 'DP', 'RP', 'PNL'], labor: 10 },
+    { name: 'Disconnect Switch 30A', system: 'Distribution', material: 'NEMA 1/3R', tags: ['DS', 'DISC'], labor: 1.5 },
+    { name: 'Transformer 45 kVA', system: 'Distribution', material: 'Dry type', tags: ['XFMR', 'TX'], labor: 10 },
+    { name: 'Junction Box 4"', system: 'Branch Power', material: 'Steel', tags: ['JB'], labor: 0.35 }
+  ]);
+  add('lowv', [
+    { name: 'Cat 6 Cable', type: 'linear', system: 'Data', material: 'Cat 6 plenum', piece: 1000, hanger: 5, waste: 10, labor: 0.012, asm: [A('J-hook', 1, 'hanger', 'EA', 0.1)] },
+    { name: 'Data Outlet 2-Port', system: 'Data', material: 'Cat 6', labor: 0.6, asm: [A('RJ45 Cat 6 jack', 2, 'qty', 'EA', 0.15), A('Faceplate 2-port', 1, 'qty', 'EA', 0.05), A('Low-voltage ring', 1, 'qty', 'EA', 0.1)] },
+    { name: 'Wireless Access Point', system: 'Data', material: 'Ceiling mount', tags: ['WAP', 'AP'], labor: 1 },
+    { name: 'Security Camera', system: 'Security', material: 'IP dome', tags: ['CAM', 'CCTV'], labor: 1.5 },
+    { name: 'Card Reader', system: 'Access Control', material: 'Proximity', tags: ['CR'], labor: 2 },
+    { name: 'Smoke Detector', system: 'Fire Alarm', material: 'Addressable', labor: 0.5 },
+    { name: 'Horn / Strobe', system: 'Fire Alarm', material: 'Wall mount', labor: 0.6 },
+    { name: 'Manual Pull Station', system: 'Fire Alarm', material: 'Addressable', labor: 0.6 },
+    { name: 'Fire Alarm Cable 18/2', type: 'linear', system: 'Fire Alarm', material: 'FPLP', piece: 1000, hanger: 5, waste: 10, labor: 0.01, asm: [A('J-hook', 1, 'hanger', 'EA', 0.1)] },
+    { name: 'Cable Tray 12"', type: 'linear', system: 'Data', material: 'Wire basket', size: '12"', piece: 10, hanger: 5, waste: 5, labor: 0.15, asm: [A('Tray support', 1, 'hanger', 'EA', 0.5), A('Splice kit', 1, 'piece', 'EA', 0.1)] }
+  ]);
+  add('drywall', [
+    { name: 'Partition 3-5/8" Studs + 5/8" GWB 2 Sides', type: 'linear', system: 'Interior Partitions', material: 'Metal studs 16" o.c.', ht: 10, asm: studWall('3-5/8"', '20 ga') },
+    { name: 'Partition 6" Studs + 5/8" GWB 2 Sides', type: 'linear', system: 'Interior Partitions', material: 'Metal studs 16" o.c.', ht: 12, asm: studWall('6"', '20 ga') },
+    { name: 'Furring 7/8" + 5/8" GWB 1 Side', type: 'linear', system: 'Interior Partitions', material: 'Hat channel 16" o.c.', ht: 10, asm: [A('Hat channel 7/8"', 0.75, 'wall', 'LF', 0.01), A('Gypsum board 5/8" Type X', 1.05, 'wall', 'SF', 0.012), A('Tape & finish Level 4', 1, 'wall', 'SF', 0.016)] },
+    { name: 'Shaft Wall 2-HR', type: 'linear', system: 'Interior Partitions', material: 'CH studs + shaftliner', ht: 10, asm: [A('CH stud 2-1/2"', 0.8, 'qty', 'EA', 0.15), A('J-track 2-1/2"', 2, 'qty', 'LF', 0.02), A('Shaftliner 1"', 1.05, 'wall', 'SF', 0.015), A('Gypsum board 5/8" Type X', 2.1, 'wall', 'SF', 0.012), A('Tape & finish Level 4', 1, 'wall', 'SF', 0.016)] },
+    { name: 'Gypsum Board Ceiling', type: 'area', system: 'Ceilings', material: '5/8" GWB on hat channel', waste: 5, labor: 0.01, asm: [A('Gypsum board 5/8"', 1.1, 'qty', 'SF', 0.015), A('Hat channel 7/8"', 0.75, 'qty', 'LF', 0.01), A('Tape & finish Level 4', 1, 'qty', 'SF', 0.018)] }
+  ]);
+  add('finish', [
+    { name: 'Acoustical Ceiling 2x4 (ACT)', type: 'area', system: 'Ceilings', material: 'Mineral fiber on 15/16" grid', waste: 5, labor: 0.018, asm: [A('Ceiling tile 2x4', 0.125, 'qty', 'EA', 0), A('Main tee 12\'', 0.0208, 'qty', 'EA', 0), A('Cross tee 4\'', 0.125, 'qty', 'EA', 0), A('Wall angle 12\'', 0.0833, 'perim', 'EA', 0.05), A('Hanger wire 12 ga', 0.0625, 'qty', 'EA', 0.02)] },
+    { name: 'Acoustical Ceiling 2x2 (ACT)', type: 'area', system: 'Ceilings', material: 'Mineral fiber on 15/16" grid', waste: 5, labor: 0.02, asm: [A('Ceiling tile 2x2', 0.25, 'qty', 'EA', 0), A('Main tee 12\'', 0.0208, 'qty', 'EA', 0), A('Cross tee 4\'', 0.125, 'qty', 'EA', 0), A('Cross tee 2\'', 0.125, 'qty', 'EA', 0), A('Wall angle 12\'', 0.0833, 'perim', 'EA', 0.05), A('Hanger wire 12 ga', 0.0625, 'qty', 'EA', 0.02)] },
+    { name: 'Carpet Tile', type: 'area', system: 'Flooring', material: '24x24 carpet tile', waste: 5, labor: 0.018, asm: [A('Carpet tile 24x24', 0.25, 'qty', 'EA', 0), A('Carpet adhesive', 0.004, 'qty', 'GAL', 0)] },
+    { name: 'Luxury Vinyl Tile (LVT)', type: 'area', system: 'Flooring', material: 'LVT', waste: 7, labor: 0.025, asm: [A('Flooring adhesive', 0.005, 'qty', 'GAL', 0)] },
+    { name: 'Vinyl Composition Tile (VCT)', type: 'area', system: 'Flooring', material: 'VCT 12x12', waste: 5, labor: 0.02, asm: [A('Flooring adhesive', 0.005, 'qty', 'GAL', 0)] },
+    { name: 'Porcelain Tile Floor', type: 'area', system: 'Flooring', material: 'Porcelain tile', waste: 10, labor: 0.1, asm: [A('Thinset mortar 50 lb', 0.013, 'qty', 'BAG', 0), A('Grout 25 lb', 0.006, 'qty', 'BAG', 0)] },
+    { name: 'Sealed Concrete', type: 'area', system: 'Flooring', material: 'Penetrating sealer', labor: 0.006, asm: [A('Concrete sealer', 0.004, 'qty', 'GAL', 0)] },
+    { name: 'Rubber Base 4"', type: 'linear', system: 'Base', material: 'Rubber cove base', waste: 5, labor: 0.03, asm: [A('Base adhesive', 0.004, 'qty', 'GAL', 0)] },
+    { name: 'Paint Walls (Primer + 2 Coats)', type: 'linear', system: 'Painting', material: 'Eggshell latex', ht: 9, labor: 0, asm: [A('Primer', 0.0033, 'wall', 'GAL', 0.004), A('Paint finish coats', 0.0057, 'wall', 'GAL', 0.008)] },
+    { name: 'Paint Ceiling', type: 'area', system: 'Painting', material: 'Flat latex', labor: 0.01, asm: [A('Ceiling paint', 0.003, 'qty', 'GAL', 0)] },
+    { name: 'Wall Tile', type: 'linear', system: 'Wall Finishes', material: 'Ceramic tile', ht: 8, labor: 0, asm: [A('Ceramic wall tile', 1.1, 'wall', 'SF', 0.12), A('Thinset mortar 50 lb', 0.013, 'wall', 'BAG', 0)] }
+  ]);
+  add('doors', [
+    { name: 'Door HM 3070 w/ HM Frame', system: 'Doors', material: 'Hollow metal', size: '3\'-0" x 7\'-0"', labor: 2.5, asm: door('3070', 1) },
+    { name: 'Door Wood 3070 w/ HM Frame', system: 'Doors', material: 'Solid core wood', size: '3\'-0" x 7\'-0"', labor: 2.5, asm: door('3070', 1) },
+    { name: 'Pair of Doors 6070 w/ HM Frame', system: 'Doors', material: 'Hollow metal', size: '6\'-0" x 7\'-0"', labor: 4, asm: door('6070', 2) },
+    { name: 'Window 4x5', system: 'Windows', material: 'Aluminum', size: '4\'-0" x 5\'-0"', labor: 2.5, asm: [A('Perimeter sealant', 18, 'qty', 'LF', 0.02)] },
+    { name: 'Storefront Glazing', type: 'area', system: 'Windows', material: 'Aluminum storefront', waste: 0, labor: 0.25 }
+  ]);
+  add('roof', [
+    { name: 'TPO Roof 60 mil', type: 'area', system: 'Roofing', material: 'TPO mechanically attached', waste: 10, labor: 0.02, asm: [A('TPO membrane 60 mil', 1.1, 'qty', 'SF', 0), A('Polyiso insulation 2.6"', 1.05, 'qty', 'SF', 0.006), A('Cover board 1/2"', 1.05, 'qty', 'SF', 0.004), A('Fasteners & plates', 0.5, 'qty', 'EA', 0)] },
+    { name: 'Modified Bitumen Roof', type: 'area', system: 'Roofing', material: '2-ply SBS', waste: 10, labor: 0.03, asm: [A('SBS base & cap sheet', 2.2, 'qty', 'SF', 0), A('Polyiso insulation 2.6"', 1.05, 'qty', 'SF', 0.006)] },
+    { name: 'Metal Coping', type: 'linear', system: 'Roofing', material: '24 ga prefinished', piece: 10, waste: 5, labor: 0.15 },
+    { name: 'Roof Flashing / Curb', system: 'Roofing', material: 'Penetration flashing', labor: 2 }
+  ]);
+  add('conc', [
+    { name: 'Slab on Grade 4"', type: 'area', system: 'Concrete', material: '3000 psi', th: 4, labor: 0.02, asm: [A('Concrete 3000 psi', 1.05, 'vol', 'CY', 0.4), A('WWF 6x6 W1.4xW1.4', 1.1, 'qty', 'SF', 0.002), A('Vapor barrier 10 mil', 1.1, 'qty', 'SF', 0.001), A('Base course 4"', 0.0123, 'qty', 'CY', 0)] },
+    { name: 'Slab on Metal Deck 5"', type: 'area', system: 'Concrete', material: '3000 psi on composite deck', th: 5, labor: 0.025, asm: [A('Concrete 3000 psi', 1.05, 'vol', 'CY', 0.4), A('WWF 6x6 W1.4xW1.4', 1.1, 'qty', 'SF', 0.002), A('Composite metal deck', 1.05, 'qty', 'SF', 0.01)] },
+    { name: 'Continuous Footing 24"x12"', type: 'linear', system: 'Foundations', material: '3000 psi', ht: 1, th: 24, labor: 0.05, asm: [A('Concrete 3000 psi', 1.05, 'vol', 'CY', 0.5), A('Rebar #5 (3 cont.)', 3.3, 'qty', 'LF', 0.01), A('Formwork (2 sides)', 2, 'wall', 'SF', 0.08), A('Excavation', 1.5, 'vol', 'CY', 0)] },
+    { name: 'Concrete Wall 8"', type: 'linear', system: 'Concrete', material: '4000 psi', ht: 8, th: 8, labor: 0, asm: [A('Concrete 4000 psi', 1.05, 'vol', 'CY', 0.6), A('Formwork (2 sides)', 2, 'wall', 'SF', 0.1), A('Rebar #4 @ 12" E.W.', 2.2, 'wall', 'LF', 0.006)] },
+    { name: 'Spread Footing 4x4x1', system: 'Foundations', material: '3000 psi', labor: 2, asm: [A('Concrete 3000 psi', 0.62, 'qty', 'CY', 0.5), A('Rebar #5', 16, 'qty', 'LF', 0.01), A('Formwork', 16, 'qty', 'SF', 0.08)] },
+    { name: 'Steel Column', system: 'Structural Steel', material: 'HSS / W-shape', labor: 4, asm: [A('Base plate & anchor bolts', 1, 'qty', 'EA', 1)] },
+    { name: 'Steel Beam', type: 'linear', system: 'Structural Steel', material: 'W-shape', waste: 2, labor: 0.15 }
+  ]);
+  add('site', [
+    { name: 'Asphalt Paving 3" on 6" Base', type: 'area', system: 'Paving', material: 'HMA surface course', labor: 0.01, asm: [A('Asphalt (HMA)', 0.0181, 'qty', 'TON', 0), A('Aggregate base 6"', 0.0185, 'qty', 'CY', 0), A('Tack coat', 0.005, 'qty', 'GAL', 0)] },
+    { name: 'Concrete Sidewalk 4"', type: 'area', system: 'Paving', material: '3000 psi', th: 4, labor: 0.05, asm: [A('Concrete 3000 psi', 1.05, 'vol', 'CY', 0.4), A('Base course 4"', 0.0123, 'qty', 'CY', 0), A('Edge forms', 1, 'perim', 'LF', 0.03)] },
+    { name: 'Curb & Gutter', type: 'linear', system: 'Paving', material: '3000 psi', waste: 5, labor: 0.2, asm: [A('Concrete 3000 psi', 0.055, 'qty', 'CY', 0)] },
+    { name: 'Storm Pipe 12" RCP', type: 'linear', system: 'Storm', material: 'RCP Class III', size: '12"', piece: 8, waste: 2, labor: 0.3, asm: [A('Trench excavation & backfill', 0.5, 'qty', 'CY', 0), A('Bedding stone', 0.1, 'qty', 'CY', 0)] },
+    { name: 'Sanitary Sewer 8" PVC SDR-35', type: 'linear', system: 'Sanitary', material: 'PVC SDR-35', size: '8"', piece: 14, waste: 2, labor: 0.25, asm: [A('Trench excavation & backfill', 0.6, 'qty', 'CY', 0), A('Bedding stone', 0.1, 'qty', 'CY', 0)] },
+    { name: 'Water Line 6" DIP', type: 'linear', system: 'Water', material: 'Ductile iron Cl 350', size: '6"', piece: 18, waste: 2, labor: 0.3, asm: [A('Trench excavation & backfill', 0.6, 'qty', 'CY', 0), A('MJ bend 6"', 1, 'el90', 'EA', 1), A('Thrust block', 1, 'el90', 'EA', 1)] },
+    { name: 'Catch Basin / Inlet', system: 'Storm', material: 'Precast', tags: ['CB', 'INL', 'DI'], labor: 8 },
+    { name: 'Manhole', system: 'Sanitary', material: 'Precast 48"', tags: ['MH', 'SMH', 'SSMH', 'STMH'], labor: 10 },
+    { name: 'Fire Hydrant', system: 'Water', material: 'Dry barrel', tags: ['FH', 'HYD'], labor: 8 },
+    { name: 'Silt Fence', type: 'linear', system: 'Erosion Control', material: 'Geotextile', waste: 5, labor: 0.02 }
+  ]);
+  if (S.units === 'metric') out.forEach(toMetricPreset);
+  return out;
+}
+// Presets are written in US units; convert one when the project is metric
+function toMetricPreset(c) {
+  const fl = 3.28084, fa = 10.7639, k = c.type === 'linear' ? fl : c.type === 'area' ? fa : 1;
+  c.labor = +(c.labor * k).toFixed(4);
+  c.piece = +(c.piece * 0.3048).toFixed(3); c.hanger = +(c.hanger * 0.3048).toFixed(3); c.ht = +(c.ht * 0.3048).toFixed(3); c.th = Math.round(c.th * 25.4);
+  const rename = { LF: 'm', SF: 'm²', CY: 'm³' };
+  c.asm.forEach(a => {
+    const per = a.base === 'qty' ? k : a.base === 'wall' ? fa : a.base === 'perim' ? fl : 1;
+    const back = a.unit === 'LF' ? fl : a.unit === 'SF' ? fa : a.unit === 'CY' && a.base !== 'vol' ? 1 / 1.30795 : 1;
+    a.f = +(a.f * per / back).toPrecision(4); a.lab = +(a.lab * back).toPrecision(4);
+    if (rename[a.unit]) a.unit = rename[a.unit];
+  });
+}
+// Equipment/fixture tags the auto-detector looks for, for the built-in mechanical presets
+const PRESET_TAGS = { 'VAV Box': ['VAV'], 'Supply Diffuser 24x24': ['SD', 'CD'], 'Return Grille 24x24': ['RG', 'RA', 'RR'], 'Fire Damper': ['FD', 'FSD'] };
+
+/* Condition list grouped by trade, filtered by the current sheet's discipline */
+function renderTradeSel() {
+  const sel = $('#tradeSel'); if (!sel) return;
+  const sh = curSheet(), d = sh && sh.disc;
+  const auto = `Auto (${d ? DISC_LABEL[d] : 'todos'})`;
+  const html = `<option value="auto">${esc(auto)}</option><option value="all">Todos los oficios</option>` + TRADES.map(t => `<option value="${t.id}">${esc(t.es)}</option>`).join('');
+  if (sel.__h !== html) { sel.innerHTML = html; sel.__h = html; }
+  sel.value = S.tradeFilter || 'auto';
+}
+
+/* ---------- Detect tags on the drawing ---------- */
+async function sheetTokens(n) {
+  const sh = S.sheets[n - 1], doc = sh && S.pdfs[sh.doc]; if (!doc) return null;
+  const pg = await doc.getPage(sh.page), vp = pg.getViewport({ scale: 1 }), tc = await pg.getTextContent();
+  const out = [];
+  tc.items.forEach(it => {
+    const str = it.str || ''; if (!str.trim()) return;
+    const [a, b, c, d, e, f] = it.transform, L = Math.hypot(a, b) || 1, h = Math.hypot(c, d) || 1;
+    const re = /\S+/g; let m;
+    while ((m = re.exec(str))) {
+      const frac = (m.index + m[0].length / 2) / str.length, w = it.width || str.length * h * 0.5;
+      const x = e + a / L * w * frac + c / h * h * 0.35, y = f + b / L * w * frac + d / h * h * 0.35;
+      const [px, py] = vp.convertToViewportPoint(x, y);
+      out.push({ t: m[0].replace(/[.,;:()]+$/g, '').toUpperCase(), x: px, y: py, h, x0: vp.convertToViewportPoint(e, f)[0] });
+    }
+  });
+  return out;
+}
+// Drop tags that sit in a schedule column (3+ stacked, left-aligned): those are tables, not the plan
+function dropScheduleTags(toks) {
+  const keep = new Set(toks);
+  const byPrefix = {};
+  toks.forEach(t => (byPrefix[t.prefix] = byPrefix[t.prefix] || []).push(t));
+  Object.values(byPrefix).forEach(list => {
+    const sorted = [...list].sort((a, b) => a.x0 - b.x0);
+    let i = 0;
+    while (i < sorted.length) {
+      let j = i; while (j + 1 < sorted.length && Math.abs(sorted[j + 1].x0 - sorted[i].x0) < 2) j++;
+      const col = sorted.slice(i, j + 1).sort((a, b) => a.y - b.y);
+      let run = [col[0]];
+      const flush = () => { if (run.length >= 3) run.forEach(t => keep.delete(t)); };
+      for (let k = 1; k < col.length; k++) { if (col[k].y - col[k - 1].y < col[k].h * 5) run.push(col[k]); else { flush(); run = [col[k]]; } }
+      flush(); i = j + 1;
+    }
+  });
+  return toks.filter(t => keep.has(t));
+}
+function tagIndex(trades) {
+  const idx = {};
+  const pool = [...S.conditions.filter(c => c.type === 'count' && (!trades || !c.trade || trades.includes(c.trade))), ...S.conditions.filter(c => c.type === 'count')];
+  pool.forEach(c => (c.tags || []).forEach(t => { const k = String(t).toUpperCase().trim(); if (k && !idx[k]) idx[k] = c.id; }));
+  return idx;
+}
+async function scanTags(scope, custom) {
+  const pages = scope === 'all' ? S.sheets.map((_, i) => i + 1) : [S.pageNum];
+  const sheetNames = new Set(S.sheets.map(s => String(s.name).toUpperCase()));
+  const groups = {};
+  const cust = (custom || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+  for (const n of pages) {
+    const toks = await sheetTokens(n); if (!toks) continue;
+    const sh = S.sheets[n - 1], trades = sh && sh.disc && DISCS[sh.disc] ? DISCS[sh.disc] : null;
+    const idx = tagIndex(trades);
+    const found = [];
+    toks.forEach(t => {
+      if (cust.includes(t.t)) { found.push(Object.assign(t, { prefix: t.t, key: t.t })); return; }
+      const m = /^([A-Z]{2,5})-?(\d{1,3}[A-Z]?)?$/.exec(t.t); if (!m) return;
+      if (sheetNames.has(t.t)) return;
+      const known = idx[m[1]];
+      if (!known && !(m[2] && /^[A-Z]{2,5}-\d{1,2}[A-Z]?$/.test(t.t))) return;   // unknown prefixes only as TAG-N
+      found.push(Object.assign(t, { prefix: m[1], key: m[1], cond: known || null, trades }));
+    });
+    dropScheduleTags(found).forEach(t => {
+      const g = groups[t.key] || (groups[t.key] = { key: t.key, cond: t.cond || null, trades: t.trades, pts: {}, n: 0, labels: new Set() });
+      (g.pts[n] = g.pts[n] || []).push([t.x, t.y]); g.n++; g.labels.add(t.t);
+    });
+  }
+  return Object.values(groups).sort((a, b) => (!!b.cond - !!a.cond) || b.n - a.n);
+}
+function openDetect() {
+  if (!S.pdf) { toast('Primero abre un plano'); return; }
+  const countConds = () => S.conditions.filter(c => c.type === 'count');
+  modal(`<h3>Detectar en el plano</h3>
+    <p style="color:var(--muted);margin-top:-4px">Busca etiquetas de texto de equipos y accesorios (VAV-1, RTU-2, WC-1, FDC…) y las convierte en conteos. Revisa la lista y desmarca lo que no aplique.</p>
+    <div class="form" style="grid-template-columns:150px 1fr"><label>Dónde buscar</label><select id="detScope"><option value="page">Esta hoja</option><option value="all">Todas las hojas</option></select>
+    <label>Texto adicional</label><input type="text" id="detCustom" placeholder="Ej.: F1, TYPE A (separados por coma)"></div>
+    <div style="margin:8px 0"><button id="detRun" type="button">Buscar</button> <span id="detMsg" style="color:var(--muted)"></span></div>
+    <div id="detRes" style="max-height:46vh;overflow:auto"></div>`, [
+    { t: 'Cancelar' },
+    { t: 'Agregar conteos', primary: true, f: () => applyDetect() }
+  ]);
+  $('#modal').style.maxWidth = '720px';
+  let res = [];
+  const run = async () => {
+    $('#detMsg').textContent = 'Leyendo el texto del plano…'; $('#detRes').innerHTML = '';
+    res = await scanTags($('#detScope').value, $('#detCustom').value);
+    S.detect = res;
+    if (!res.length) { $('#detMsg').textContent = 'No se encontraron etiquetas. Si el plano no tiene texto (está escaneado o en curvas), usa “Buscar símbolo”.'; return; }
+    $('#detMsg').textContent = `${res.reduce((s, g) => s + g.n, 0)} etiqueta(s) en ${res.length} grupo(s)`;
+    const opts = (sel, tr) => `<option value="__new">+ Nueva condición</option>` + countConds().map((c, i) => [c, (!tr || tr.includes(c.trade) ? 0 : 1) * 1e4 + i]).sort((x, y) => x[1] - y[1]).map(x => x[0]).map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+    $('#detRes').innerHTML = `<table class="estSys" style="width:100%"><thead><tr><th></th><th>Etiqueta</th><th>Encontradas</th><th>Ejemplos</th><th>Condición</th></tr></thead><tbody>${res.map((g, i) => `<tr><td><input type="checkbox" class="detOn" data-i="${i}" ${g.cond ? 'checked' : ''}></td><td><b>${esc(g.key)}</b></td><td>${g.n}</td><td style="color:var(--muted)">${esc([...g.labels].slice(0, 4).join(', '))}</td><td><select class="detCond" data-i="${i}">${opts(g.cond, g.trades)}</select></td></tr>`).join('')}</tbody></table>`;
+  };
+  $('#detRun').addEventListener('click', run); $('#detScope').addEventListener('change', run);
+  run();
+}
+function applyDetect() {
+  const res = S.detect || []; let added = 0, made = 0;
+  const rows = [...document.querySelectorAll('#detRes .detOn')].filter(x => x.checked).map(x => ({ g: res[+x.dataset.i], cond: document.querySelector(`.detCond[data-i="${x.dataset.i}"]`).value }));
+  if (!rows.length) { toast('Marca al menos una etiqueta'); return false; }
+  pushUndo();
+  rows.forEach(({ g, cond }) => {
+    let c = condById(cond);
+    if (!c) {
+      const tr = (g.trades || activeTrades() || [''])[0] || '';
+      const pal = (tradeById(tr) || TRADES[0]).pal;
+      c = { id: newId('c'), name: g.key, type: 'count', color: pal[S.conditions.length % pal.length], system: '', material: '', size: '', shape: 'none', w: 0, h: 0, d: 0, gauge: 'auto', piece: 0, hanger: 0, waste: 0, price: 0, labor: 0, ht: 0, th: 0, trade: tr, tags: [g.key], asm: [] };
+      S.conditions.push(c); made++;
+    }
+    added += addCountPoints(c.id, g.pts, 3);
+  });
+  refresh();
+  toast(`${added} conteo(s) agregados${made ? ` · ${made} condición(es) nueva(s)` : ''}`);
+}
+// Add count marks per page, skipping points that already have a mark of that condition nearby
+function addCountPoints(cid, ptsByPage, tol) {
+  let added = 0;
+  Object.entries(ptsByPage).forEach(([pg, pts]) => {
+    pg = +pg;
+    const existing = S.items.filter(i => i.type === 'count' && i.cond === cid && i.page === pg).flatMap(i => i.points);
+    const fresh = pts.filter(p => !existing.some(q => dist(p, q) < tol));
+    if (!fresh.length) return;
+    S.items.push({ id: newId('m'), page: pg, type: 'count', cond: cid, points: fresh, auto: true });
+    added += fresh.length;
+  });
+  return added;
+}
+
+/* ---------- Symbol search (template matching on the rendered sheet) ---------- */
+const tick = () => new Promise(r => setTimeout(r, 0));
+async function rasterSheet(n, sc) {
+  const sh = S.sheets[n - 1], doc = sh && S.pdfs[sh.doc]; if (!doc) return null;
+  const pg = await doc.getPage(sh.page), vp0 = pg.getViewport({ scale: 1 });
+  sc = Math.min(sc, Math.sqrt(2e7 / (vp0.width * vp0.height)));
+  const vp = pg.getViewport({ scale: sc });
+  const cv = document.createElement('canvas'); cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height);
+  const ctx = cv.getContext('2d', { willReadFrequently: true }); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+  await pg.render({ canvasContext: ctx, viewport: vp }).promise;
+  const W = cv.width, H = cv.height, px = ctx.getImageData(0, 0, W, H).data, B = new Uint8Array(W * H);
+  for (let i = 0, j = 0; i < B.length; i++, j += 4) B[i] = px[j] * 0.3 + px[j + 1] * 0.59 + px[j + 2] * 0.11 < 170 ? 1 : 0;
+  cv.width = cv.height = 1;
+  return { W, H, B, sc };
+}
+function dilate(B, W, H) {
+  const T = new Uint8Array(W * H), D = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) { const r = y * W; for (let x = 0; x < W; x++) T[r + x] = B[r + x] | (x > 0 ? B[r + x - 1] : 0) | (x < W - 1 ? B[r + x + 1] : 0); }
+  for (let y = 0; y < H; y++) { const r = y * W; for (let x = 0; x < W; x++) D[r + x] = T[r + x] | (y > 0 ? T[r + x - W] : 0) | (y < H - 1 ? T[r + x + W] : 0); }
+  return D;
+}
+function integral(B, W, H) {
+  const I = new Uint32Array((W + 1) * (H + 1));
+  for (let y = 0; y < H; y++) { let s = 0; for (let x = 0; x < W; x++) { s += B[y * W + x]; I[(y + 1) * (W + 1) + x + 1] = I[y * (W + 1) + x + 1] + s; } }
+  return I;
+}
+// Cut the selected symbol (trimmed to its ink) out of the raster as a small binary template
+function makeTemplate(R, rect) {
+  const { W, B, sc } = R;
+  let x0 = Math.max(0, Math.floor(Math.min(rect[0][0], rect[1][0]) * sc)), y0 = Math.max(0, Math.floor(Math.min(rect[0][1], rect[1][1]) * sc));
+  let x1 = Math.min(R.W - 1, Math.ceil(Math.max(rect[0][0], rect[1][0]) * sc)), y1 = Math.min(R.H - 1, Math.ceil(Math.max(rect[0][1], rect[1][1]) * sc));
+  let ax = Infinity, ay = Infinity, bx = -1, by = -1;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (B[y * W + x]) { if (x < ax) ax = x; if (y < ay) ay = y; if (x > bx) bx = x; if (y > by) by = y; }
+  if (bx < 0) return null;
+  const tw = bx - ax + 1, th = by - ay + 1, T = new Uint8Array(tw * th);
+  for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) T[y * tw + x] = B[(ay + y) * W + ax + x];
+  return { tw, th, T };
+}
+function rotTemplate(t) {   // 90° clockwise
+  const { tw, th, T } = t, R = new Uint8Array(tw * th);
+  for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) R[x * th + (th - 1 - y)] = T[y * tw + x];
+  return { tw: th, th: tw, T: R };
+}
+async function matchTemplate(R, tpls, thr, D, I) {
+  const { W, H, B } = R, cands = [];
+  for (const t of tpls) {
+    const { tw, th, T } = t, Td = dilate(T, tw, th);
+    const on = [], onD = [];
+    for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) { if (T[y * tw + x]) on.push(y * W + x); if (Td[y * tw + x]) onD.push(y * W + x); }
+    const n = on.length; if (n < 12) continue;
+    const lo = n * 0.6, hi = n * 1.9, maxMiss = Math.floor(n * (1 - thr)), W1 = W + 1;
+    for (let y = 0; y + th <= H; y++) {
+      if ((y & 63) === 0) await tick();
+      for (let x = 0; x + tw <= W; x++) {
+        const cnt = I[(y + th) * W1 + x + tw] - I[y * W1 + x + tw] - I[(y + th) * W1 + x] + I[y * W1 + x];
+        if (cnt < lo || cnt > hi) continue;
+        const base = y * W + x; let miss = 0;
+        for (let k = 0; k < n; k++) if (!D[base + on[k]] && ++miss > maxMiss) break;
+        if (miss > maxMiss) continue;
+        let hit = 0; for (let k = 0; k < onD.length; k++) hit += B[base + onD[k]];
+        const prec = hit / cnt; if (prec < thr - 0.1) continue;
+        cands.push([x + tw / 2, y + th / 2, (1 - miss / n + prec) / 2, tw, th]);
+      }
+    }
+  }
+  cands.sort((a, b) => b[2] - a[2]);
+  const keep = [];
+  for (const c of cands) if (!keep.some(k => Math.abs(k[0] - c[0]) < Math.max(k[3], c[3]) * 0.6 && Math.abs(k[1] - c[1]) < Math.max(k[4], c[4]) * 0.6)) keep.push(c);
+  return keep.map(k => [k[0] / R.sc, k[1] / R.sc]);
+}
+async function symbolSearch(rect, scope) {
+  const rw = Math.abs(rect[1][0] - rect[0][0]), rh = Math.abs(rect[1][1] - rect[0][1]);
+  if (rw < 2 || rh < 2) { toast('Encierra el símbolo con un recuadro'); return; }
+  const f = S.find = S.find && S.find.rect === rect ? S.find : { rect, page: S.pageNum, pts: {}, scope: 'page' };
+  f.scope = scope || f.scope; f.busy = true;
+  const sc = Math.max(1, Math.min(6, 40 / Math.max(rw, rh)));
+  const thr = +$('#findSens').value || 0.8, rot = $('#findRot').checked;
+  showFindBar('Buscando…');
+  try {
+    const R0 = await rasterSheet(f.page, sc);
+    let tpl = makeTemplate(R0, rect);
+    if (!tpl || tpl.tw * tpl.th < 30) { toast('El recuadro no tiene suficiente dibujo. Encierra el símbolo completo.'); endFind(); return; }
+    const tpls = [tpl]; if (rot) { let t = tpl; for (let i = 0; i < 3; i++) { t = rotTemplate(t); tpls.push(t); } }
+    const pages = f.scope === 'all' ? S.sheets.map((_, i) => i + 1).filter(n => S.pdfs[S.sheets[n - 1].doc]) : [f.page];
+    f.pts = {};
+    for (const n of pages) {
+      showFindBar(pages.length > 1 ? `Buscando en la hoja ${pages.indexOf(n) + 1} de ${pages.length}…` : 'Buscando…');
+      const R = n === f.page ? R0 : await rasterSheet(n, R0.sc);
+      if (!R) continue;
+      const pts = await matchTemplate(R, tpls, thr, dilate(R.B, R.W, R.H), integral(R.B, R.W, R.H));
+      if (pts.length) f.pts[n] = pts;
+      if (!S.find) return;   // cancelled
+    }
+  } catch (e) { console.error(e); toast('No se pudo buscar el símbolo: ' + e.message); }
+  f.busy = false;
+  showFindBar(); drawOverlay();
+}
+function findTotal() { return S.find ? Object.values(S.find.pts).reduce((s, a) => s + a.length, 0) : 0; }
+function showFindBar(msg) {
+  const f = S.find; $('#findBar').hidden = !f; if (!f) return;
+  const here = (f.pts[S.pageNum] || []).length, tot = findTotal(), pages = Object.keys(f.pts).length;
+  $('#findTxt').textContent = msg || (f.scope === 'all' ? `${tot} encontrados en ${pages} hoja(s) · clic en un recuadro para quitarlo` : `${here} encontrados en esta hoja · clic en un recuadro para quitarlo`);
+  const conds = S.conditions.filter(c => c.type === 'count'), vis = visibleConds().filter(c => c.type === 'count');
+  const cur = $('#findCond').value;
+  const def = condById(cur) && cur || (condById(S.activeCond) && condById(S.activeCond).type === 'count' ? S.activeCond : (vis[0] || conds[0] || {}).id);
+  $('#findCond').innerHTML = `<option value="__new">+ Nueva condición</option>` + [...vis, ...conds.filter(c => !vis.includes(c))].map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  $('#findCond').value = def || '__new';
+  $('#findAdd').disabled = !!f.busy || !tot; $('#findAll').disabled = !!f.busy || f.scope === 'all';
+  $('#findAdd').textContent = `Agregar ${tot} conteo(s)`;
+}
+function endFind() { S.find = null; $('#findBar').hidden = true; drawOverlay(); }
+function findOverlay() {
+  const f = S.find; if (!f) return '';
+  let h = '';
+  const q = 7 / S.zoom;
+  if (f.page === S.pageNum) { const [a, b] = f.rect; h += `<rect x="${Math.min(a[0], b[0])}" y="${Math.min(a[1], b[1])}" width="${Math.abs(b[0] - a[0])}" height="${Math.abs(b[1] - a[1])}" fill="none" stroke="#7048e8" stroke-width="1.5" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>`; }
+  (f.pts[S.pageNum] || []).forEach((p, i) => { h += `<rect data-found="${i}" x="${p[0] - q}" y="${p[1] - q}" width="${q * 2}" height="${q * 2}" fill="#7048e8" fill-opacity=".18" stroke="#7048e8" stroke-width="2" vector-effect="non-scaling-stroke" style="cursor:pointer"/>`; });
+  return h;
+}
+function addFound() {
+  const f = S.find; if (!f || !findTotal()) return;
+  let cid = $('#findCond').value;
+  pushUndo();
+  if (!condById(cid)) {
+    const tr = (activeTrades() || [''])[0] || '', pal = (tradeById(tr) || TRADES[0]).pal;
+    const c = { id: newId('c'), name: 'Símbolo ' + (S.conditions.filter(x => /^Símbolo \d+$/.test(x.name)).length + 1), type: 'count', color: pal[S.conditions.length % pal.length], system: '', material: '', size: '', shape: 'none', w: 0, h: 0, d: 0, gauge: 'auto', piece: 0, hanger: 0, waste: 0, price: 0, labor: 0, ht: 0, th: 0, trade: tr, tags: [], asm: [] };
+    S.conditions.push(c); cid = c.id;
+  }
+  const n = addCountPoints(cid, f.pts, 4);
+  S.activeCond = cid; endFind(); refresh();
+  toast(`${n} conteo(s) agregados a ${condById(cid).name}`);
+}
+
+/* ---------- Library: add trades to an existing project ---------- */
+function openLibrary() {
+  const all = tradePresets(), have = new Set(S.conditions.map(c => c.name));
+  modal(`<h3>Biblioteca de oficios</h3><p style="color:var(--muted);margin-top:-4px">Agrega al proyecto las condiciones típicas de cada oficio, con ensambles y mano de obra de referencia.</p>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:6px 14px">${TRADES.map(t => { const n = all.filter(c => c.trade === t.id && !have.has(c.name)).length; return `<label><input type="checkbox" class="libT" value="${t.id}" ${n ? '' : 'disabled'}> ${esc(t.es)}</label><span style="color:var(--muted)">${n ? n + ' nuevas' : 'ya están'}</span>`; }).join('')}</div>`, [
+    { t: 'Cancelar' },
+    { t: 'Agregar', primary: true, f: () => {
+      const ids = [...document.querySelectorAll('.libT')].filter(x => x.checked).map(x => x.value);
+      const add = all.filter(c => ids.includes(c.trade) && !have.has(c.name)).map(applyDefaultLabor);
+      if (!add.length) return false;
+      pushUndo(); S.conditions.push(...add); refresh(); toast(`${add.length} condición(es) agregadas`);
+    } }
+  ]);
+}
+
+/* ---------- Wiring ---------- */
+$('#btnDetect').addEventListener('click', openDetect);
+$('#btnLib').addEventListener('click', openLibrary);
+$('#tradeSel').addEventListener('change', e => { S.tradeFilter = e.target.value; try { localStorage.setItem('smarttakeoff:trade', S.tradeFilter); } catch (err) { } renderConditions(); });
+try { S.tradeFilter = localStorage.getItem('smarttakeoff:trade') || 'auto'; } catch (e) { S.tradeFilter = 'auto'; }
+$('#findExit').addEventListener('click', endFind);
+$('#findAdd').addEventListener('click', addFound);
+$('#findAll').addEventListener('click', () => { if (S.find) symbolSearch(S.find.rect, 'all'); });
+$('#findSens').addEventListener('change', () => { if (S.find) symbolSearch(S.find.rect); });
+$('#findRot').addEventListener('change', () => { if (S.find) symbolSearch(S.find.rect); });
+
+/* ---------- Translations for this section ---------- */
+TRADES.forEach(t => { UI_EN[t.es] = t.en; EN[t.es] = t.en; });
+Object.assign(UI_EN, {
+  'Mecánico': 'Mechanical', 'Plomería': 'Plumbing', 'Incendios': 'Fire Prot.', 'Eléctrico': 'Electrical', 'Bajo voltaje': 'Low Voltage', 'Arquitectónico': 'Architectural', 'Estructural': 'Structural', 'Civil': 'Civil', 'General': 'General',
+  'Todos los oficios': 'All trades', 'Biblioteca': 'Library', 'Agregar condiciones de otros oficios': 'Add conditions for other trades', 'Mostrar condiciones de': 'Show conditions for',
+  'Detectar': 'Detect', 'Detectar etiquetas de equipos y accesorios en el plano y convertirlas en conteos': 'Detect equipment and fixture tags on the drawing and turn them into counts',
+  'Buscar símbolo': 'Find Symbol', 'Buscar símbolo: encierra uno y encuentra todos los iguales (B)': 'Find symbol: box one and find all matching ones (B)',
+  'Dibuja un recuadro alrededor de un símbolo (clic en dos esquinas) para encontrar todos los iguales': 'Draw a box around a symbol (click two corners) to find all matching ones',
+  'Detectar en el plano': 'Detect on drawing', 'Busca etiquetas de texto de equipos y accesorios (VAV-1, RTU-2, WC-1, FDC…) y las convierte en conteos. Revisa la lista y desmarca lo que no aplique.': 'Finds equipment and fixture text tags (VAV-1, RTU-2, WC-1, FDC…) and turns them into counts. Review the list and uncheck anything that does not apply.',
+  'Dónde buscar': 'Search in', 'Esta hoja': 'This sheet', 'Todas las hojas': 'All sheets', 'Texto adicional': 'Extra text', 'Ej.: F1, TYPE A (separados por coma)': 'e.g. F1, TYPE A (comma separated)', 'Buscar': 'Search',
+  'Leyendo el texto del plano…': 'Reading the drawing text…', 'No se encontraron etiquetas. Si el plano no tiene texto (está escaneado o en curvas), usa “Buscar símbolo”.': 'No tags found. If the drawing has no text (scanned or outlined), use “Find Symbol”.',
+  'Etiqueta': 'Tag', 'Encontradas': 'Found', 'Ejemplos': 'Examples', '+ Nueva condición': '+ New condition', 'Agregar conteos': 'Add counts', 'Marca al menos una etiqueta': 'Check at least one tag',
+  'Primero abre un plano': 'Open a drawing first', 'Incluir girados': 'Include rotated', 'Estricta': 'Strict', 'Normal': 'Normal', 'Flexible': 'Loose', 'Buscar en todas las hojas': 'Search all sheets', 'Cancelar': 'Cancel',
+  'Buscando…': 'Searching…', 'Encierra el símbolo con un recuadro': 'Draw a box around the symbol', 'El recuadro no tiene suficiente dibujo. Encierra el símbolo completo.': 'The box has too little drawing in it. Box the whole symbol.',
+  'Biblioteca de oficios': 'Trade library', 'Agrega al proyecto las condiciones típicas de cada oficio, con ensambles y mano de obra de referencia.': 'Add typical conditions for each trade to the project, with reference assemblies and labor.',
+  'ya están': 'already added', 'Agregar': 'Add', 'Oficio': 'Trade', '(sin oficio)': '(no trade)', 'Disciplina': 'Discipline', '(sin detectar)': '(not detected)',
+  'Etiquetas en plano': 'Drawing tags', 'VAV, RTU, WC… (separadas por coma)': 'VAV, RTU, WC… (comma separated)', 'Etiquetas de texto que “Detectar” convierte en conteos de esta condición.': 'Text tags that “Detect” turns into counts of this condition.',
+  'Espesor': 'Thickness', 'Altura de muro': 'Wall height', 'Con altura, el largo × altura da el área de muro. Con espesor, sale el volumen de concreto.': 'With a height, length × height gives the wall area. With a thickness, you get the concrete volume.',
+  'por área de muro (largo × altura)': 'per wall area (length × height)', 'por volumen (yd³ / m³)': 'per volume (CY / m³)', 'por perímetro del área': 'per area perimeter', 'Otras': 'Other'
+});
+EN['Oficio'] = 'Trade';
+UI_PATTERNS.unshift(
+  [/^Auto \((.*)\)$/, (m, a) => `Auto (${a === 'todos' ? 'all' : trUI(a)})`],
+  [/^(\d+) encontrados en esta hoja · clic en un recuadro para quitarlo$/, (m, a) => `${a} found on this sheet · click a box to remove it`],
+  [/^(\d+) encontrados en (\d+) hoja\(s\) · clic en un recuadro para quitarlo$/, (m, a, b) => `${a} found on ${b} sheet(s) · click a box to remove it`],
+  [/^Buscando en la hoja (\d+) de (\d+)…$/, (m, a, b) => `Searching sheet ${a} of ${b}…`],
+  [/^Agregar (\d+) conteo\(s\)$/, (m, a) => `Add ${a} count(s)`],
+  [/^(\d+) conteo\(s\) agregados a (.*)$/, (m, a, b) => `${a} count(s) added to ${b}`],
+  [/^(\d+) conteo\(s\) agregados( · (\d+) condición\(es\) nueva\(s\))?$/, (m, a, b, c) => `${a} count(s) added${b ? ` · ${c} new condition(s)` : ''}`],
+  [/^(\d+) etiqueta\(s\) en (\d+) grupo\(s\)$/, (m, a, b) => `${a} tag(s) in ${b} group(s)`],
+  [/^(\d+) nuevas$/, (m, a) => `${a} new`],
+  [/^(\d+) condición\(es\) agregadas$/, (m, a) => `${a} condition(s) added`],
+  [/^No se pudo buscar el símbolo: (.*)$/, (m, a) => 'Could not search for the symbol: ' + a],
+  [/^Altura de muro \((.*)\)$/, (m, a) => `Wall height (${a})`],
+  [/^Espesor \((.*)\)$/, (m, a) => `Thickness (${a})`]
+);
+
 /* ---------- Init ---------- */
-S.conditions = presetConditions(); S.activeCond = S.conditions[0].id;
+S.conditions = presetConditions(); S.activeCond = S.conditions[0].id; S.est = defaultEst();
 setTool('select');
 refresh();
 try { const l = localStorage.getItem('smarttakeoff:lang'); if (l) $('#expLang').value = l; } catch (e) { }
