@@ -1,0 +1,26 @@
+{
+  "name": "smarttakeoff",
+  "productName": "SmartTakeoff",
+  "version": "0.5.0",
+  "description": "Takeoff de planos PDF con mediciones mecánicas, despiece y exportación a Excel",
+  "main": "electron/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win --publish never",
+    "dist:dir": "electron-builder --dir --publish never"
+  },
+  "devDependencies": {
+    "electron": "31.7.7",
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "com.smarttakeoff.app",
+    "productName": "SmartTakeoff",
+    "files": ["index.html", "lib/**", "electron/**"],
+    "directories": { "output": "dist", "buildResources": "build" },
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true, "shortcutName": "SmartTakeoff" },
+    "fileAssociations": [{ "ext": "json", "name": "SmartTakeoff project", "role": "Editor" }]
+  }
+}

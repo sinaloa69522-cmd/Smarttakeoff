@@ -4,6 +4,11 @@
 
 Abre `index.html` con Chrome o Edge (doble clic). No necesita internet ni instalación; los planos no salen de tu equipo.
 
+## App de escritorio (Windows)
+- Cada pull request y cada etiqueta `v*` generan el instalador **SmartTakeoff Setup.exe** con GitHub Actions (workflow *Desktop app (Windows)*).
+- Para una versión oficial: crea un *release* con una etiqueta como `v0.5.0` y el instalador se adjunta solo.
+- Para probar en tu PC con Node instalado: `npm install` y luego `npm start`.
+
 ## Flujo básico
 1. **Abrir PDF** (o arrastra el plano a la ventana).
 2. **Escala:** elige una del menú (1/4"=1'-0", 1:50…) o usa **Calibrar (K)** y haz clic en los extremos de una cota conocida.
