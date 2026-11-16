@@ -55,7 +55,7 @@ aside h3{margin:0;padding:10px 10px 6px;font-size:11px;text-transform:uppercase;
 .cond:hover .ed{visibility:visible}
 #pageList{max-height:28vh;overflow:auto;padding:0 6px 8px;display:flex;flex-wrap:wrap;gap:4px}
 #pageList button{min-width:36px}
-main{display:grid;grid-template-rows:1fr 230px;min-height:0;min-width:0}
+main{display:grid;grid-template-rows:1fr 230px;grid-template-columns:minmax(0,1fr);min-height:0;min-width:0}
 #viewer{position:relative;overflow:auto;background:var(--viewer);min-height:0}
 #stage{position:relative;margin:24px;display:inline-block;box-shadow:0 2px 12px rgba(0,0,0,.25);background:#fff}
 #pdfCanvas{display:block}
@@ -128,6 +128,7 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
       <button id="redo" title="Rehacer (Ctrl+Y)">↷</button>
     </div>
     <div class="grp">
+      <select id="uiLang" title="Idioma de la app"><option value="en">English</option><option value="es">Español</option></select>
       <select id="unitsSel" title="Sistema de unidades">
         <option value="imperial">Imperial (ft, in)</option>
         <option value="metric">Métrico (m, mm)</option>
@@ -1073,12 +1074,117 @@ function closeModal() { $('#modalBg').style.display = 'none'; $('#modal').innerH
 let toastT;
 function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 3200); }
 
+/* ---------- UI language (English / Spanish) ---------- */
+// The UI is authored in Spanish; this layer translates every rendered text node and tooltip to English when selected.
+const UI_EN = {
+  'Abrir PDF': 'Open PDF', 'Guardar': 'Save', 'Abrir proyecto': 'Open Project', 'Seleccionar': 'Select', 'Calibrar': 'Calibrate', 'Lineal': 'Linear', 'Área': 'Area', 'Conteo': 'Count',
+  'Nube': 'Cloud', 'Texto': 'Text', 'Escala…': 'Scale…', 'Calibrar con una cota…': 'Calibrate from a dimension…', 'Ajustar': 'Fit', 'Imperial (ft, in)': 'Imperial (ft, in)', 'Métrico (m, mm)': 'Metric (m, mm)',
+  'Condiciones': 'Conditions', 'Importar': 'Import', '+ Nueva': '+ New', 'Páginas': 'Sheets', 'Abre un plano para empezar': 'Open a drawing to get started',
+  'Arrastra un PDF aquí o usa el botón. Tus planos se procesan en este equipo y no se suben a ningún servidor.': 'Drop a PDF here or use the button. Drawings are processed on this computer and never uploaded to a server.',
+  'Abrir plano PDF': 'Open PDF drawing', 'Detalle': 'Detail', 'Resumen / despiece': 'Summary / material breakdown', 'Copiar para Excel': 'Copy for Excel', 'Exportar CSV': 'Export CSV', 'Exportar Excel': 'Export Excel',
+  'Aún no hay mediciones. Elige una condición a la izquierda y mide sobre el plano.': 'No takeoffs yet. Pick a condition on the left and measure on the drawing.',
+  'El resumen aparece cuando tengas mediciones.': 'The summary appears once you have takeoffs.',
+  'Sin condiciones. Crea una con “+ Nueva”.': 'No conditions. Create one with “+ New”.',
+  'Herramienta:': 'Tool:', 'Escala:': 'Scale:', 'sin calibrar': 'not calibrated', 'sin escala': 'not scaled',
+  'Clic en una medición para seleccionarla · arrastra para desplazar · rueda para zoom · Supr para borrar': 'Click a takeoff to select it · drag to pan · wheel to zoom · Delete to remove',
+  'Clic en los dos extremos de una cota conocida': 'Click both ends of a known dimension',
+  'Clic para agregar puntos · doble clic o Enter para terminar · Shift = ortogonal · Esc cancela': 'Click to add points · double-click or Enter to finish · Shift = ortho · Esc cancels',
+  'Clic en cada vértice · doble clic o Enter para cerrar · Shift = ortogonal · Esc cancela': 'Click each corner · double-click or Enter to close · Shift = ortho · Esc cancels',
+  'Clic en cada elemento para contarlo · Enter o Esc para terminar el grupo': 'Click each item to count it · Enter or Esc ends the group',
+  'Clic en dos esquinas opuestas': 'Click two opposite corners', 'Clic donde quieres la nota': 'Click where the note goes',
+  'Abrir plano PDF ': 'Open PDF drawing', 'Guardar proyecto (.json)': 'Save project (.json)', 'Abrir proyecto (.json)': 'Open project (.json)', 'Seleccionar / mover (V)': 'Select / move (V)',
+  'Calibrar escala con una cota conocida (K)': 'Calibrate scale from a known dimension (K)', 'Medición lineal (L)': 'Linear takeoff (L)', 'Medición de área (A)': 'Area takeoff (A)', 'Conteo (C)': 'Count (C)',
+  'Nube de revisión (R)': 'Revision cloud (R)', 'Nota de texto (T)': 'Text note (T)', 'Escala de la página': 'Sheet scale', 'Arquitectónica': 'Architectural', 'Ingeniería': 'Engineering', 'Métrica': 'Metric',
+  'Alejar (-)': 'Zoom out (-)', 'Acercar (+)': 'Zoom in (+)', 'Ajustar a la ventana': 'Fit to window', 'Deshacer (Ctrl+Z)': 'Undo (Ctrl+Z)', 'Rehacer (Ctrl+Y)': 'Redo (Ctrl+Y)', 'Sistema de unidades': 'Unit system',
+  'Importar condiciones desde Excel': 'Import conditions from Excel', 'Nueva condición': 'New condition', 'Editar': 'Edit', 'Idioma de la exportación': 'Export language',
+  'Copiar la tabla para pegar en Excel': 'Copy the table to paste into Excel', 'Idioma de la app': 'App language',
+  'Nombre': 'Name', 'Tipo': 'Type', 'Color': 'Color', 'Sistema': 'System', 'Material': 'Material', 'Tamaño': 'Size', 'Forma de ducto': 'Duct shape',
+  'No es ducto (tubería u otro)': 'Not a duct (pipe or other)', 'Ducto rectangular': 'Rectangular duct', 'Ducto redondo': 'Round duct', 'Calibre (galv.)': 'Gauge (galv.)',
+  'Automático (SMACNA baja presión)': 'Automatic (SMACNA low pressure)', 'Ancho × alto': 'Width × height', 'Diámetro': 'Diameter', 'Largo de pieza': 'Piece length',
+  'Tramo comercial: ducto 5 ft / 1.5 m, tubería 20–21 ft / 6 m. Deja 0 para no calcular piezas.': 'Stock length: duct 5 ft / 1.5 m, pipe 20–21 ft / 6 m. Leave 0 to skip piece count.',
+  'Soporte cada': 'Hanger every', 'Desperdicio': 'Waste', 'Precio unitario': 'Unit price', 'Cancelar': 'Cancel',
+  'Ej.: Ducto 18x10 suministro': 'e.g. Supply Duct 18x10', 'HVAC suministro, Agua fría…': 'HVAC Supply, Domestic Cold Water…', 'Lámina galv. cal. 24, Cobre tipo L…': 'Galvanized 24 ga, Copper Type L…',
+  '3/4", 24x12… (opcional)': '3/4", 24x12… (optional)', 'Editar condición': 'Edit condition', 'Eliminar': 'Delete', 'Calibrar escala': 'Calibrate scale', 'Distancia real': 'Actual distance',
+  'Ej.: 25 pies 6 pulgadas': 'e.g. 25 feet 6 inches', 'Aplicar a': 'Apply to', 'Solo esta página': 'This sheet only', 'Todas las páginas': 'All sheets', 'pies': 'feet', 'pulgadas': 'inches',
+  'Nota de texto': 'Text note', 'Agregar': 'Add', 'Texto ': 'Text', 'Pág.': 'Sheet', 'Condición': 'Condition', 'Cantidad': 'Quantity', 'C/desperdicio': 'W/ waste', 'Piezas': 'Pieces', 'Lámina': 'Sheet metal',
+  'Cal.': 'Ga.', 'Peso': 'Weight', 'Soportes': 'Hangers', 'Costo': 'Cost', 'Mediciones': 'Takeoffs', 'Unidad': 'Unit', 'Desp. %': 'Waste %', 'Total': 'Total', 'Mediciones en páginas sin escala': 'Takeoffs on sheets without a scale',
+  '¿A qué páginas aplicamos esta escala?': 'Which sheets should use this scale?', 'pza': 'EA',
+  'Medición guardada. Calibra la escala para ver la cantidad real.': 'Takeoff saved. Calibrate the scale to see the real quantity.',
+  'Los puntos están demasiado juntos': 'The points are too close together', 'Escribe una distancia mayor que cero': 'Enter a distance greater than zero',
+  'Esta condición tiene mediciones. Pulsa Eliminar otra vez para borrarla junto con sus mediciones.': 'This condition has takeoffs. Press Delete again to remove it along with its takeoffs.',
+  'Ponle un nombre a la condición': 'Give the condition a name', 'Unidades métricas (m, m², mm)': 'Metric units (m, m², mm)', 'Unidades imperiales (ft, ft², in)': 'Imperial units (ft, ft², in)',
+  'No hay mediciones para exportar': 'No takeoffs to export', 'Excel exportado': 'Excel exported', 'No hay mediciones para copiar': 'No takeoffs to copy', 'El navegador no permitió copiar': 'The browser blocked copying',
+  'No encontré filas con columna “Nombre”': 'No rows with a “Name” column were found', 'Abre un plano primero': 'Open a drawing first', 'Proyecto cargado': 'Project loaded',
+  'Suelta un archivo PDF': 'Drop a PDF file', 'Se restauró el takeoff guardado de este plano': 'Restored the saved takeoff for this drawing',
+  'Tabla copiada. Pégala en Excel con Ctrl+V': 'Table copied. Paste it into Excel with Ctrl+V', 'Calibrada': 'Calibrated'
+};
+const UI_PATTERNS = [
+  [/^(Lineal|Área|Conteo)( · .*)$/, (m, a, b) => UI_EN[a] + b],
+  [/^Calibrada \((.*)\)$/, (m, a) => `Calibrated (${a})`],
+  [/^Actual: (.*)$/, (m, a) => 'Current: ' + trUI(a)],
+  [/^([\d.,]+) pza$/, (m, a) => a + ' EA'],
+  [/^\((\d+) sin escala\)$/, (m, a) => `(${a} not scaled)`],
+  [/^(\d+) medición\(es\)( · sin escala)?$/, (m, a, b) => `${a} takeoff(s)${b ? ' · not scaled' : ''}`],
+  [/^(.*) · (\d+) página\(s\)$/, (m, a, b) => `${a} · ${b} sheet(s)`],
+  [/^Escala (.+) aplicada( a todas las páginas)?$/, (m, a, b) => `Scale ${trUI(a)} applied${b ? ' to all sheets' : ''}`],
+  [/^Aplicar escala (.+)$/, (m, a) => 'Apply scale ' + a],
+  [/^Precio por (pieza|\S+), se multiplica por la cantidad con desperdicio\.$/, (m, a) => `Price per ${a === 'pieza' ? 'each' : a}, multiplied by the quantity with waste.`],
+  [/^No tienes condiciones de tipo (\S+)\. Crea una para empezar a medir\.$/, (m, a) => `You have no ${({ lineal: 'linear', 'área': 'area', conteo: 'count' })[a] || a} conditions. Create one to start measuring.`],
+  [/^(\d+) condición\(es\) importadas o actualizadas$/, (m, a) => `${a} condition(s) imported or updated`],
+  [/^No se pudo abrir el PDF: (.*)$/, (m, a) => 'Could not open the PDF: ' + a],
+  [/^No se pudo leer el archivo: (.*)$/, (m, a) => 'Could not read the file: ' + a],
+  [/^No se pudo abrir el proyecto: (.*)$/, (m, a) => 'Could not open the project: ' + a],
+  [/^Proyecto cargado\. Ahora abre el plano “(.*)”\.$/, (m, a) => `Project loaded. Now open the drawing “${a}”.`],
+  [/^(.+?) \(([^()]*)\)$/, (m, a, b) => UI_EN[a] ? `${UI_EN[a]} (${b})` : m]
+];
+let uiLang = 'en';
+try { uiLang = localStorage.getItem('smarttakeoff:ui') || 'en'; } catch (e) { }
+function trUI(s) {
+  if (uiLang !== 'en') return s;
+  if (Object.prototype.hasOwnProperty.call(UI_EN, s)) return UI_EN[s];
+  for (const [re, f] of UI_PATTERNS) { if (re.test(s)) return s.replace(re, f); }
+  return s;
+}
+const ATTRS = ['title', 'placeholder', 'label'];
+function trNode(n) {
+  if (n.nodeType === 3) {
+    if (n.parentElement && n.parentElement.closest('script,style,svg')) return;
+    if (n.__out !== n.data) n.__es = n.data;              // new or changed by the app: remember the Spanish source
+    const src = n.__es, t = src.trim();
+    const out = t ? src.replace(t, trUI(t)) : src;
+    n.__out = out; if (n.data !== out) n.data = out;
+  } else if (n.nodeType === 1) {
+    if (n.matches('script,style,svg')) return;
+    for (const a of ATTRS) {
+      if (!n.hasAttribute(a) || (a === 'label' && n.tagName !== 'OPTGROUP')) continue;
+      const v = n.getAttribute(a), k = '__es_' + a, ko = '__out_' + a;
+      if (n[ko] !== v) n[k] = v;
+      const out = trUI(n[k]); n[ko] = out; if (v !== out) n.setAttribute(a, out);
+    }
+    for (const c of n.childNodes) trNode(c);
+  }
+}
+new MutationObserver(ms => {
+  for (const m of ms) {
+    if (m.type === 'characterData') trNode(m.target);
+    else if (m.type === 'attributes') trNode(m.target);
+    else m.addedNodes.forEach(trNode);
+  }
+}).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+function setUiLang(l) {
+  uiLang = l; document.documentElement.lang = l;
+  try { localStorage.setItem('smarttakeoff:ui', l); } catch (e) { }
+  trNode(document.body);
+}
+
 /* ---------- Init ---------- */
 S.conditions = presetConditions(); S.activeCond = S.conditions[0].id;
 setTool('select');
 refresh();
 try { const l = localStorage.getItem('smarttakeoff:lang'); if (l) $('#expLang').value = l; } catch (e) { }
 $('#expLang').addEventListener('change', e => { try { localStorage.setItem('smarttakeoff:lang', e.target.value); } catch (err) { } });
+$('#uiLang').value = uiLang; $('#uiLang').addEventListener('change', e => { setUiLang(e.target.value); setTool(S.tool); });
+setUiLang(uiLang);
 window.SmartTakeoff = S; // handy for debugging in the console
 </script>
 </body>

@@ -18,6 +18,7 @@ Abre `index.html` con Chrome o Edge (doble clic). No necesita internet ni instal
 ## Proyectos en EE. UU.
 Las condiciones de ejemplo usan términos de obra de EE. UU. (Supply/Return Duct, Copper Type L, PEX, Black Steel Sch 40, PVC DWV, Cast Iron No-Hub, VAV Box…).
 Los ductos calculan **calibre** automático (aprox. SMACNA baja presión) y **peso de lámina galvanizada en lb**. El Excel puede exportarse **en inglés** (LF, SF, EA) para contratistas.
+La interfaz está **en inglés** por defecto; cambia a español con el selector de idioma de la barra superior.
 
 ## Condiciones
 Cada condición define sistema, material, tamaño, forma de ducto (ancho×alto o diámetro), largo de pieza, separación de soportes, % de desperdicio y precio unitario.
