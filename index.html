@@ -1915,24 +1915,29 @@ const TRADES = [
   { id: 'fire', es: 'Protección contra incendios', en: 'Fire Protection', pal: ['#c92a2a', '#e03131', '#a61e4d', '#f03e3e'] },
   { id: 'elec', es: 'Eléctrico', en: 'Electrical', pal: ['#f59f00', '#e67700', '#fab005', '#d9480f', '#862e9c'] },
   { id: 'lowv', es: 'Bajo voltaje / Alarma', en: 'Low Voltage / Fire Alarm', pal: ['#1098ad', '#0b7285', '#3bc9db', '#c92a2a'] },
+  { id: 'wood', es: 'Carpintería de madera (framing)', en: 'Wood Framing', pal: ['#a0522d', '#8b5a2b', '#cd853f', '#6f4e37', '#d2691e'] },
+  { id: 'ext', es: 'Exterior: siding y molduras', en: 'Exterior: Siding & Trim', pal: ['#2f9e44', '#1c7ed6', '#e8590c', '#7048e8', '#0c8599'] },
   { id: 'drywall', es: 'Muros y drywall', en: 'Drywall & Framing', pal: ['#868e96', '#495057', '#5c7cfa', '#7048e8'] },
   { id: 'finish', es: 'Acabados (pisos, plafones, pintura)', en: 'Finishes (floors, ceilings, paint)', pal: ['#748ffc', '#20c997', '#f783ac', '#94d82d', '#ff922b'] },
+  { id: 'carp', es: 'Carpintería fina y gabinetes', en: 'Finish Carpentry & Cabinets', pal: ['#b08968', '#7f5539', '#ddb892', '#9c6644'] },
   { id: 'doors', es: 'Puertas y ventanas', en: 'Doors & Windows', pal: ['#7950f2', '#ae3ec9', '#4263eb'] },
   { id: 'roof', es: 'Techos', en: 'Roofing', pal: ['#0b7285', '#364fc7', '#5c940d'] },
+  { id: 'insul', es: 'Aislamiento', en: 'Insulation', pal: ['#f783ac', '#faa2c1', '#e64980', '#fcc419'] },
+  { id: 'masonry', es: 'Mampostería', en: 'Masonry', pal: ['#c92a2a', '#a61e4d', '#868e96'] },
   { id: 'conc', es: 'Concreto y estructura', en: 'Concrete & Structural', pal: ['#868e96', '#495057', '#e8590c', '#1864ab'] },
   { id: 'site', es: 'Obra civil / Sitio', en: 'Civil / Site', pal: ['#343a40', '#2b8a3e', '#1971c2', '#c92a2a', '#e67700'] }
 ];
 const tradeById = id => TRADES.find(t => t.id === id);
 const tradeName = id => { const t = tradeById(id); return t ? t.es : ''; };
 // Sheet disciplines (US National CAD Standard designators) and the trades each one feeds
-const DISCS = { mech: ['mech'], plumb: ['plumb'], fire: ['fire'], elec: ['elec'], lowv: ['lowv'], arch: ['drywall', 'finish', 'doors', 'roof'], struct: ['conc'], civil: ['site'] };
+const DISCS = { mech: ['mech'], plumb: ['plumb'], fire: ['fire'], elec: ['elec'], lowv: ['lowv'], arch: ['wood', 'ext', 'drywall', 'finish', 'carp', 'doors', 'roof', 'insul', 'masonry'], struct: ['conc', 'wood', 'masonry'], civil: ['site'] };
 const DISC_LABEL = { mech: 'Mecánico', plumb: 'Plomería', fire: 'Incendios', elec: 'Eléctrico', lowv: 'Bajo voltaje', arch: 'Arquitectónico', struct: 'Estructural', civil: 'Civil', gen: 'General' };
 const DISC_PREFIX = { M: 'mech', H: 'mech', MH: 'mech', MP: 'mech', MD: 'mech', ME: 'mech', P: 'plumb', PL: 'plumb', PD: 'plumb', FP: 'fire', F: 'fire', FS: 'fire',
   E: 'elec', EP: 'elec', EL: 'elec', ES: 'elec', ED: 'elec', T: 'lowv', TC: 'lowv', TN: 'lowv', TY: 'lowv', LV: 'lowv', FA: 'lowv', Y: 'lowv',
   A: 'arch', AD: 'arch', AE: 'arch', I: 'arch', ID: 'arch', Q: 'arch', D: 'arch', S: 'struct', SF: 'struct', C: 'civil', CS: 'civil', CG: 'civil', CU: 'civil', CP: 'civil', L: 'civil', LS: 'civil', V: 'civil', G: 'gen', GI: 'gen', CV: 'gen' };
 const DISC_WORDS = [['fire', /FIRE PROTECTION|SPRINKLER/g], ['lowv', /FIRE ALARM|TELECOM|TECHNOLOGY|LOW VOLTAGE|SECURITY PLAN|DATA PLAN/g], ['plumb', /PLUMBING|SANITARY|DOMESTIC WATER|WASTE AND VENT/g],
-  ['mech', /MECHANICAL|HVAC|DUCTWORK/g], ['elec', /ELECTRICAL|LIGHTING PLAN|POWER PLAN/g], ['struct', /STRUCTURAL|FOUNDATION PLAN|FRAMING PLAN/g],
-  ['civil', /CIVIL|GRADING|UTILITY PLAN|SITE PLAN|EROSION/g], ['arch', /ARCHITECTURAL|REFLECTED CEILING|FINISH PLAN|DOOR SCHEDULE/g]];
+  ['mech', /MECHANICAL|HVAC|DUCTWORK/g], ['elec', /ELECTRICAL|LIGHTING PLAN|POWER PLAN/g], ['struct', /STRUCTURAL|FOUNDATION PLAN|FRAMING PLAN|ROOF FRAMING|FLOOR FRAMING/g],
+  ['civil', /CIVIL|GRADING|UTILITY PLAN|SITE PLAN|EROSION/g], ['arch', /ARCHITECTURAL|REFLECTED CEILING|FINISH PLAN|DOOR SCHEDULE|ELEVATIONS?\b|WALL SECTION/g]];
 function discFromName(n) {
   const m = /^([A-Z]{1,3})[-.\s]?\d/.exec(String(n || '').toUpperCase().trim());
   if (!m) return null;
@@ -2070,7 +2075,63 @@ function tradePresets() {
     { name: 'TPO Roof 60 mil', type: 'area', system: 'Roofing', material: 'TPO mechanically attached', waste: 10, labor: 0.02, asm: [A('TPO membrane 60 mil', 1.1, 'qty', 'SF', 0), A('Polyiso insulation 2.6"', 1.05, 'qty', 'SF', 0.006), A('Cover board 1/2"', 1.05, 'qty', 'SF', 0.004), A('Fasteners & plates', 0.5, 'qty', 'EA', 0)] },
     { name: 'Modified Bitumen Roof', type: 'area', system: 'Roofing', material: '2-ply SBS', waste: 10, labor: 0.03, asm: [A('SBS base & cap sheet', 2.2, 'qty', 'SF', 0), A('Polyiso insulation 2.6"', 1.05, 'qty', 'SF', 0.006)] },
     { name: 'Metal Coping', type: 'linear', system: 'Roofing', material: '24 ga prefinished', piece: 10, waste: 5, labor: 0.15 },
+    { name: 'Asphalt Shingles (Architectural)', type: 'area', system: 'Roofing', material: 'Laminated shingles', waste: 10, labor: 0.025, asm: [A('Shingles (square)', 0.01, 'qty', 'SQ', 0), A('Synthetic underlayment', 1, 'qty', 'SF', 0.002), A('Starter strip', 1, 'perim', 'LF', 0.01), A('Roofing nails', 0.02, 'qty', 'LB', 0)] },
+    { name: 'Ridge Cap', type: 'linear', system: 'Roofing', material: 'Hip & ridge shingles', waste: 5, labor: 0.04 },
+    { name: 'Ridge Vent', type: 'linear', system: 'Roofing', material: 'Shingle-over vent', piece: 4, waste: 5, labor: 0.05 },
+    { name: 'Ice & Water Shield', type: 'area', system: 'Roofing', material: 'Self-adhered membrane', waste: 10, labor: 0.004 },
     { name: 'Roof Flashing / Curb', system: 'Roofing', material: 'Penetration flashing', labor: 2 }
+  ]);
+  add('wood', [
+    { name: 'Wall 2x4 @ 16" o.c. (8\' plate)', type: 'linear', system: 'Wall Framing', material: 'SPF #2 2x4', ht: 8, waste: 10, labor: 0, asm: [A('Stud 2x4x8\' (incl. corners & blocking)', 1, 'qty', 'EA', 0.2), A('Plates 2x4 (bottom + double top)', 3, 'qty', 'LF', 0.02), A('OSB 7/16" 4x8 wall sheathing', 0.0313, 'wall', 'EA', 0.25), A('Framing nails 16d', 0.02, 'wall', 'LB', 0), A('Anchor bolt 1/2" @ 6\'', 0.17, 'qty', 'EA', 0.1)] },
+    { name: 'Wall 2x6 @ 16" o.c. (9\' plate)', type: 'linear', system: 'Wall Framing', material: 'SPF #2 2x6', ht: 9, waste: 10, labor: 0, asm: [A('Stud 2x6 precut 104-5/8" (incl. corners & blocking)', 1, 'qty', 'EA', 0.25), A('Plates 2x6 (bottom + double top)', 3, 'qty', 'LF', 0.025), A('OSB 7/16" 4x8 wall sheathing', 0.0313, 'wall', 'EA', 0.25), A('Framing nails 16d', 0.02, 'wall', 'LB', 0), A('Anchor bolt 1/2" @ 6\'', 0.17, 'qty', 'EA', 0.1)] },
+    { name: 'Interior Wall 2x4 @ 16" o.c. (no sheathing)', type: 'linear', system: 'Wall Framing', material: 'SPF #2 2x4', ht: 8, waste: 10, labor: 0, asm: [A('Stud 2x4x8\' (incl. corners & blocking)', 1, 'qty', 'EA', 0.2), A('Plates 2x4 (bottom + double top)', 3, 'qty', 'LF', 0.02), A('Framing nails 16d', 0.012, 'wall', 'LB', 0)] },
+    { name: 'Header 2-2x10 (door/window)', system: 'Wall Framing', material: 'DF #2 2x10', size: 'up to 6\' opening', labor: 0.6, asm: [A('2x10 header lumber', 14, 'qty', 'LF', 0), A('Jack + king studs 2x4', 4, 'qty', 'EA', 0.1)] },
+    { name: 'Floor Joists 2x10 @ 16" + 3/4" Subfloor', type: 'area', system: 'Floor Framing', material: 'DF #2 2x10', waste: 10, labor: 0.03, asm: [A('Joist 2x10', 0.75, 'qty', 'LF', 0), A('Rim board 2x10', 1, 'perim', 'LF', 0.03), A('Subfloor 3/4" T&G OSB 4x8', 0.0313, 'qty', 'EA', 0.2), A('Subfloor adhesive (tube)', 0.025, 'qty', 'EA', 0), A('Joist hanger 2x10', 0.04, 'qty', 'EA', 0.05)] },
+    { name: 'Floor I-Joists 11-7/8" @ 16" + 3/4" Subfloor', type: 'area', system: 'Floor Framing', material: 'I-joist 11-7/8"', waste: 5, labor: 0.025, asm: [A('I-joist 11-7/8"', 0.75, 'qty', 'LF', 0), A('Rim board 1-1/8" x 11-7/8"', 1, 'perim', 'LF', 0.03), A('Subfloor 3/4" T&G OSB 4x8', 0.0313, 'qty', 'EA', 0.2), A('Subfloor adhesive (tube)', 0.025, 'qty', 'EA', 0)] },
+    { name: 'Roof Trusses @ 24" o.c.', type: 'linear', system: 'Roof Framing', material: 'Engineered trusses', waste: 0, labor: 0, asm: [A('Roof truss', 0.5, 'qty', 'EA', 0.5), A('Hurricane tie', 1, 'qty', 'EA', 0.05), A('Truss bracing 2x4', 1, 'qty', 'LF', 0.01)] },
+    { name: 'Rafters 2x8 @ 16" + Roof Sheathing', type: 'area', system: 'Roof Framing', material: 'DF #2 2x8', waste: 10, labor: 0.03, asm: [A('Rafter 2x8', 0.75, 'qty', 'LF', 0), A('OSB 7/16" 4x8 roof sheathing', 0.0313, 'qty', 'EA', 0.2), A('H-clip 7/16"', 0.06, 'qty', 'EA', 0)] },
+    { name: 'Roof Sheathing 7/16" OSB', type: 'area', system: 'Roof Framing', material: 'OSB 7/16"', waste: 10, labor: 0, asm: [A('OSB 7/16" 4x8 roof sheathing', 0.0313, 'qty', 'EA', 0.25), A('H-clip 7/16"', 0.06, 'qty', 'EA', 0)] },
+    { name: 'Beam LVL 1-3/4" x 11-7/8" (2-ply)', type: 'linear', system: 'Beams & Posts', material: 'LVL', waste: 5, labor: 0.15, asm: [A('LVL 1-3/4" x 11-7/8"', 2, 'qty', 'LF', 0)] },
+    { name: 'Post 6x6', system: 'Beams & Posts', material: 'PT 6x6', labor: 1, asm: [A('Post base / cap hardware', 2, 'qty', 'EA', 0.2)] },
+    { name: 'Wood Stair (per flight)', system: 'Stairs', material: '2x12 stringers', labor: 16, asm: [A('Stringer 2x12', 3, 'qty', 'EA', 0), A('Tread', 13, 'qty', 'EA', 0)] },
+    { name: 'Deck: Framing + Decking', type: 'area', system: 'Decks', material: 'PT framing, 5/4x6 decking', waste: 10, labor: 0.15, asm: [A('Joist 2x8 PT', 0.75, 'qty', 'LF', 0), A('Decking 5/4x6', 2.2, 'qty', 'LF', 0), A('Deck screws', 0.03, 'qty', 'LB', 0), A('Joist hanger 2x8', 0.06, 'qty', 'EA', 0.05)] }
+  ]);
+  add('ext', [
+    { name: 'Lap Siding Fiber Cement 8-1/4"', type: 'area', system: 'Siding', material: 'Fiber cement, 7" exposure', waste: 10, labor: 0.04, asm: [A('Lap plank 8-1/4" x 12\'', 0.143, 'qty', 'EA', 0), A('Housewrap', 1, 'qty', 'SF', 0.003), A('Siding nails', 0.012, 'qty', 'LB', 0), A('Caulk (tube)', 0.01, 'qty', 'EA', 0)] },
+    { name: 'Vinyl Siding', type: 'area', system: 'Siding', material: 'Vinyl D4', waste: 10, labor: 0.025, asm: [A('Vinyl siding (square)', 0.01, 'qty', 'SQ', 0), A('Starter strip', 1, 'perim', 'LF', 0.01), A('Housewrap', 1, 'qty', 'SF', 0.003)] },
+    { name: 'Board & Batten Siding', type: 'area', system: 'Siding', material: 'Fiber cement panel + battens', waste: 10, labor: 0.05, asm: [A('Panel 4x10', 0.025, 'qty', 'EA', 0), A('Batten 1x3 @ 16"', 0.75, 'qty', 'LF', 0.01), A('Housewrap', 1, 'qty', 'SF', 0.003)] },
+    { name: 'Fascia Board 1x6', type: 'linear', system: 'Exterior Trim', material: 'Fiber cement / PVC trim', size: '1x6', piece: 12, waste: 10, labor: 0.06, asm: [A('Trim nails', 0.005, 'qty', 'LB', 0), A('Caulk (tube)', 0.02, 'qty', 'EA', 0)] },
+    { name: 'Frieze Board 1x8', type: 'linear', system: 'Exterior Trim', material: 'Fiber cement / PVC trim', size: '1x8', piece: 12, waste: 10, labor: 0.06, asm: [A('Trim nails', 0.005, 'qty', 'LB', 0), A('Caulk (tube)', 0.02, 'qty', 'EA', 0)] },
+    { name: 'Rake Trim 1x6', type: 'linear', system: 'Exterior Trim', material: 'Fiber cement / PVC trim', size: '1x6', piece: 12, waste: 10, labor: 0.08 },
+    { name: 'Soffit Vented', type: 'area', system: 'Soffit', material: 'Vinyl / aluminum vented', waste: 10, labor: 0.05, asm: [A('Soffit panel 12" x 12\'', 0.0833, 'qty', 'EA', 0), A('J-channel / F-channel', 1, 'perim', 'LF', 0.01)] },
+    { name: 'Corner Board 1x4 (pair)', type: 'linear', system: 'Exterior Trim', material: 'Fiber cement / PVC trim', size: '1x4', piece: 12, waste: 10, labor: 0.08, asm: [A('Trim board 1x4', 2, 'qty', 'LF', 0)] },
+    { name: 'Window/Door Exterior Trim 1x4', type: 'linear', system: 'Exterior Trim', material: 'Fiber cement / PVC trim', size: '1x4', piece: 12, waste: 10, labor: 0.07 },
+    { name: 'Drip Edge', type: 'linear', system: 'Exterior Trim', material: 'Aluminum', piece: 10, waste: 5, labor: 0.02 },
+    { name: 'Gutter 5" K-Style', type: 'linear', system: 'Gutters', material: 'Seamless aluminum', waste: 5, labor: 0.1, hanger: 2, asm: [A('Gutter hanger', 1, 'hanger', 'EA', 0), A('End cap / miter', 0.05, 'qty', 'EA', 0.1)] },
+    { name: 'Downspout 2x3', system: 'Gutters', material: 'Aluminum', labor: 0.75, asm: [A('Downspout 2x3', 12, 'qty', 'LF', 0), A('Elbow 2x3', 3, 'qty', 'EA', 0)] },
+    { name: 'Housewrap / WRB', type: 'area', system: 'Weather Barrier', material: 'Housewrap', waste: 10, labor: 0.004, asm: [A('Housewrap tape', 0.1, 'qty', 'LF', 0), A('Cap nails/staples', 0.004, 'qty', 'LB', 0)] }
+  ]);
+  add('carp', [
+    { name: 'Base Trim 3-1/4" MDF', type: 'linear', system: 'Interior Trim', material: 'Primed MDF', piece: 16, waste: 10, labor: 0.05 },
+    { name: 'Crown Molding 3-5/8"', type: 'linear', system: 'Interior Trim', material: 'Primed MDF', piece: 16, waste: 12, labor: 0.1 },
+    { name: 'Interior Door Prehung 2868 + Casing', system: 'Interior Doors', material: 'Hollow core', size: '2\'-8" x 6\'-8"', labor: 1.5, asm: [A('Door casing 2-1/4" (both sides)', 34, 'qty', 'LF', 0.02), A('Passage/privacy set', 1, 'qty', 'EA', 0.3)] },
+    { name: 'Window Casing & Stool', system: 'Interior Trim', material: 'Primed MDF', labor: 1, asm: [A('Window casing 2-1/4"', 16, 'qty', 'LF', 0), A('Stool & apron', 1, 'qty', 'EA', 0)] },
+    { name: 'Base Cabinets', type: 'linear', system: 'Cabinets', material: 'Plywood box', waste: 0, labor: 0.6 },
+    { name: 'Wall Cabinets', type: 'linear', system: 'Cabinets', material: 'Plywood box', waste: 0, labor: 0.6 },
+    { name: 'Countertop Quartz', type: 'area', system: 'Countertops', material: 'Quartz 3 cm', waste: 10, labor: 0.15 },
+    { name: 'Closet Shelf & Rod', type: 'linear', system: 'Interior Trim', material: 'Melamine shelf', waste: 5, labor: 0.15 }
+  ]);
+  add('insul', [
+    { name: 'Wall Batts R-13 (2x4)', type: 'area', system: 'Thermal Insulation', material: 'Fiberglass kraft-faced', waste: 5, labor: 0.006 },
+    { name: 'Wall Batts R-21 (2x6)', type: 'area', system: 'Thermal Insulation', material: 'Fiberglass kraft-faced', waste: 5, labor: 0.007 },
+    { name: 'Attic Blown-in R-38', type: 'area', system: 'Thermal Insulation', material: 'Loose-fill fiberglass', waste: 5, labor: 0.006, asm: [A('Blown insulation bag', 0.02, 'qty', 'BAG', 0), A('Baffle', 0.05, 'perim', 'EA', 0.05)] },
+    { name: 'Spray Foam Closed Cell 2"', type: 'area', system: 'Thermal Insulation', material: 'ccSPF R-13', waste: 5, labor: 0.01 },
+    { name: 'Rigid Insulation 2" XPS', type: 'area', system: 'Thermal Insulation', material: 'XPS 4x8', waste: 5, labor: 0.01, asm: [A('XPS board 2" 4x8', 0.0313, 'qty', 'EA', 0)] }
+  ]);
+  add('masonry', [
+    { name: 'CMU Wall 8"', type: 'linear', system: 'Masonry', material: '8x8x16 CMU', ht: 8, waste: 5, labor: 0, asm: [A('CMU block 8x8x16', 1.125, 'wall', 'EA', 0.1), A('Mortar (bag)', 0.03, 'wall', 'BAG', 0), A('Grout (cells @ 48")', 0.0025, 'wall', 'CY', 0), A('Rebar #5 vertical @ 48"', 0.25, 'wall', 'LF', 0), A('Joint reinforcing @ 16"', 0.75, 'wall', 'LF', 0)] },
+    { name: 'Brick Veneer', type: 'area', system: 'Masonry', material: 'Modular brick', waste: 5, labor: 0.12, asm: [A('Brick', 6.86, 'qty', 'EA', 0), A('Mortar (bag)', 0.02, 'qty', 'BAG', 0), A('Brick tie', 0.375, 'qty', 'EA', 0)] },
+    { name: 'Stone Veneer', type: 'area', system: 'Masonry', material: 'Manufactured stone', waste: 10, labor: 0.15, asm: [A('Lath & scratch coat', 1.05, 'qty', 'SF', 0.02), A('Mortar (bag)', 0.025, 'qty', 'BAG', 0)] }
   ]);
   add('conc', [
     { name: 'Slab on Grade 4"', type: 'area', system: 'Concrete', material: '3000 psi', th: 4, labor: 0.02, asm: [A('Concrete 3000 psi', 1.05, 'vol', 'CY', 0.4), A('WWF 6x6 W1.4xW1.4', 1.1, 'qty', 'SF', 0.002), A('Vapor barrier 10 mil', 1.1, 'qty', 'SF', 0.001), A('Base course 4"', 0.0123, 'qty', 'CY', 0)] },
