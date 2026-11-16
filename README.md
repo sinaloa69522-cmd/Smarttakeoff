@@ -20,6 +20,12 @@ Las condiciones de ejemplo usan términos de obra de EE. UU. (Supply/Return Duct
 Los ductos calculan **calibre** automático (aprox. SMACNA baja presión) y **peso de lámina galvanizada en lb**. El Excel puede exportarse **en inglés** (LF, SF, EA) para contratistas.
 La interfaz está **en inglés** por defecto; cambia a español con el selector de idioma de la barra superior.
 
+## Codos, risers y lista de materiales
+- Los **codos** se cuentan solos en cada quiebre de una línea (45° o 90°) y se marcan con un círculo en el plano.
+- En la tabla *Detalle* puedes sumar **Vertical** (risers/drops en ft) y el número de **Drops**; cada drop suma un codo de 90°.
+- Cada condición tiene un **ensamble**: materiales que salen solos con un factor (por LF, por ft² de lámina, por soporte, por codo, por tramo o por drop).
+- La pestaña **Materiales** (Bill of Materials) junta todo y se exporta a Excel junto con la hoja *Ensambles*, que puedes editar y volver a importar.
+
 ## Condiciones
 Cada condición define sistema, material, tamaño, forma de ducto (ancho×alto o diámetro), largo de pieza, separación de soportes, % de desperdicio y precio unitario.
 Puedes editar la hoja *Condiciones* del Excel exportado y volver a cargarla con **Importar**.

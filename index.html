@@ -87,6 +87,8 @@ footer b{color:var(--ink);font-weight:600}
 .form input,.form select{width:100%}
 .form .row2{display:flex;gap:6px}
 .form .hint{grid-column:1/3;color:var(--muted);font-size:12px;margin-top:-2px}
+.asmRow{display:grid;grid-template-columns:minmax(0,2.2fr) 64px minmax(0,1.6fr) 56px 76px auto;gap:5px;margin-bottom:5px}
+.asmRow input,.asmRow select{min-width:0}
 .actions{display:flex;justify-content:flex-end;gap:6px;margin-top:14px}
 #toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60;max-width:90vw}
 #toast.show{opacity:.95}
@@ -162,6 +164,7 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
       <div id="tabs">
         <button data-tab="detail" class="on">Detalle</button>
         <button data-tab="summary">Resumen / despiece</button>
+        <button data-tab="bom">Materiales</button>
         <span class="sp"></span>
         <select id="expLang" title="Idioma de la exportación"><option value="en">Export in English</option><option value="es">Exportar en español</option></select>
         <button id="btnCopy" title="Copiar la tabla para pegar en Excel">Copiar para Excel</button>
@@ -219,21 +222,28 @@ function presetConditions() {
   const imp = S.units === 'imperial';
   const L = ft => imp ? ft : +(ft * 0.3048).toFixed(2);
   const D = inch => imp ? inch : Math.round(inch * 25.4);
-  const c = (o) => Object.assign({ id: newId('c'), type: 'linear', color: '#d9480f', system: '', material: '', size: '', shape: 'none', w: 0, h: 0, d: 0, gauge: 'auto', piece: 0, hanger: 0, waste: 0, price: 0 }, o);
+  const c = (o) => Object.assign({ id: newId('c'), type: 'linear', color: '#d9480f', system: '', material: '', size: '', shape: 'none', w: 0, h: 0, d: 0, gauge: 'auto', piece: 0, hanger: 0, waste: 0, price: 0, asm: [] }, o);
+  const A = (name, f, base, unit) => ({ name, f, base, unit, price: 0 });
+  const ductAsm = (sz, insul) => [A(`Elbow 90° ${sz}`, 1, 'el90', 'EA'), A(`Elbow 45° ${sz}`, 1, 'el45', 'EA'), A('Hanger strap 1" galv.', 2, 'hanger', 'EA'), A('Duct sealant', 0.01, 'sheet', 'GAL'), ...(insul ? [A('Duct wrap 1-1/2" FSK', 1.1, 'sheet', 'SF')] : [])];
+  const pipeAsm = (sz, mat, insul) => [A(`Elbow 90° ${sz} ${mat}`, 1, 'el90', 'EA'), A(`Elbow 45° ${sz} ${mat}`, 1, 'el45', 'EA'), A(`Coupling ${sz} ${mat}`, 1, 'piece', 'EA'), A(`Clevis hanger ${sz}`, 1, 'hanger', 'EA'), A('Threaded rod 3/8"', 2, 'hanger', 'LF'), ...(insul ? [A(`Pipe insulation ${sz} x ${insul}`, 1, 'qty', 'LF')] : [])];
   return [
-    c({ name: 'Supply Duct 24x12', type: 'linear', color: '#e8590c', system: 'HVAC Supply', material: 'Galvanized steel', shape: 'rect', w: D(24), h: D(12), piece: L(5), hanger: L(8), waste: 10 }),
-    c({ name: 'Return Duct 20x10', type: 'linear', color: '#1971c2', system: 'HVAC Return', material: 'Galvanized steel', shape: 'rect', w: D(20), h: D(10), piece: L(5), hanger: L(8), waste: 10 }),
-    c({ name: 'Round Duct 10"', type: 'linear', color: '#1c7ed6', system: 'HVAC Supply', material: 'Galvanized spiral', shape: 'round', d: D(10), piece: L(10), hanger: L(10), waste: 10 }),
-    c({ name: 'Flex Duct 8"', type: 'linear', color: '#74c0fc', system: 'HVAC Supply', material: 'Insulated flex R-6', size: '8"', piece: L(25), hanger: L(5), waste: 10 }),
-    c({ name: 'Copper Type L 3/4"', type: 'linear', color: '#c2255c', system: 'Domestic Cold Water', material: 'Copper Type L', size: '3/4"', piece: L(20), hanger: L(6), waste: 5 }),
-    c({ name: 'Copper Type L 1/2" HW', type: 'linear', color: '#e64980', system: 'Domestic Hot Water', material: 'Copper Type L', size: '1/2"', piece: L(20), hanger: L(6), waste: 5 }),
-    c({ name: 'PEX 1/2"', type: 'linear', color: '#f783ac', system: 'Domestic Water', material: 'PEX-A', size: '1/2"', piece: L(100), hanger: L(2.67), waste: 5 }),
-    c({ name: 'Black Steel 2" Sch 40', type: 'linear', color: '#5f3dc4', system: 'Chilled Water', material: 'Black steel Sch 40', size: '2"', piece: L(21), hanger: L(10), waste: 5 }),
-    c({ name: 'PVC DWV 4"', type: 'linear', color: '#2b8a3e', system: 'Sanitary', material: 'PVC DWV Sch 40', size: '4"', piece: L(20), hanger: L(4), waste: 5 }),
-    c({ name: 'Cast Iron No-Hub 4"', type: 'linear', color: '#495057', system: 'Storm', material: 'Cast iron no-hub', size: '4"', piece: L(10), hanger: L(5), waste: 5 }),
-    c({ name: 'Supply Diffuser 24x24', type: 'count', color: '#f08c00', system: 'HVAC Supply', material: 'Aluminum', size: '24x24' }),
+    c({ name: 'Supply Duct 24x12', type: 'linear', color: '#e8590c', system: 'HVAC Supply', material: 'Galvanized steel', shape: 'rect', w: D(24), h: D(12), piece: L(5), hanger: L(8), waste: 10, asm: ductAsm('24x12', true) }),
+    c({ name: 'Return Duct 20x10', type: 'linear', color: '#1971c2', system: 'HVAC Return', material: 'Galvanized steel', shape: 'rect', w: D(20), h: D(10), piece: L(5), hanger: L(8), waste: 10, asm: ductAsm('20x10', false) }),
+    c({ name: 'Round Duct 10"', type: 'linear', color: '#1c7ed6', system: 'HVAC Supply', material: 'Galvanized spiral', shape: 'round', d: D(10), piece: L(10), hanger: L(10), waste: 10, asm: [A('Elbow 90° 10" round', 1, 'el90', 'EA'), A('Elbow 45° 10" round', 1, 'el45', 'EA'), A('Hanger strap 1" galv.', 1, 'hanger', 'EA'), A('Duct sealant', 0.01, 'sheet', 'GAL')] }),
+    c({ name: 'Flex Duct 8"', type: 'linear', color: '#74c0fc', system: 'HVAC Supply', material: 'Insulated flex R-6', size: '8"', piece: L(25), hanger: L(5), waste: 10, asm: [A('Flex duct clamp 8"', 2, 'drop', 'EA'), A('Flex duct strap', 1, 'hanger', 'EA')] }),
+    c({ name: 'Copper Type L 3/4"', type: 'linear', color: '#c2255c', system: 'Domestic Cold Water', material: 'Copper Type L', size: '3/4"', piece: L(20), hanger: L(6), waste: 5, asm: pipeAsm('3/4"', 'copper', '1" fiberglass') }),
+    c({ name: 'Copper Type L 1/2" HW', type: 'linear', color: '#e64980', system: 'Domestic Hot Water', material: 'Copper Type L', size: '1/2"', piece: L(20), hanger: L(6), waste: 5, asm: pipeAsm('1/2"', 'copper', '1" fiberglass') }),
+    c({ name: 'PEX 1/2"', type: 'linear', color: '#f783ac', system: 'Domestic Water', material: 'PEX-A', size: '1/2"', piece: L(100), hanger: L(2.67), waste: 5, asm: [A('Elbow 90° 1/2" PEX', 1, 'el90', 'EA'), A('PEX crimp ring 1/2"', 2, 'elbow', 'EA'), A('PEX clip 1/2"', 1, 'hanger', 'EA')] }),
+    c({ name: 'Black Steel 2" Sch 40', type: 'linear', color: '#5f3dc4', system: 'Chilled Water', material: 'Black steel Sch 40', size: '2"', piece: L(21), hanger: L(10), waste: 5, asm: pipeAsm('2"', 'Sch 40', '1-1/2" fiberglass') }),
+    c({ name: 'PVC DWV 4"', type: 'linear', color: '#2b8a3e', system: 'Sanitary', material: 'PVC DWV Sch 40', size: '4"', piece: L(20), hanger: L(4), waste: 5, asm: [A('1/4 bend 4" PVC DWV', 1, 'el90', 'EA'), A('1/8 bend 4" PVC DWV', 1, 'el45', 'EA'), A('Coupling 4" PVC DWV', 1, 'piece', 'EA'), A('Clevis hanger 4"', 1, 'hanger', 'EA'), A('PVC cement', 0.02, 'elbow', 'QT')] }),
+    c({ name: 'Cast Iron No-Hub 4"', type: 'linear', color: '#495057', system: 'Storm', material: 'Cast iron no-hub', size: '4"', piece: L(10), hanger: L(5), waste: 5, asm: [A('1/4 bend 4" no-hub', 1, 'el90', 'EA'), A('1/8 bend 4" no-hub', 1, 'el45', 'EA'), A('No-hub coupling 4"', 1, 'piece', 'EA'), A('No-hub coupling 4"', 2, 'elbow', 'EA'), A('Clevis hanger 4"', 1, 'hanger', 'EA')] }),
+    c({ name: 'Supply Diffuser 24x24', type: 'count', color: '#f08c00', system: 'HVAC Supply', material: 'Aluminum', size: '24x24', asm: [A('Flex duct 8"', 6, 'qty', 'LF'), A('Spin-in collar 8" w/ damper', 1, 'qty', 'EA')] }),
     c({ name: 'Return Grille 24x24', type: 'count', color: '#0c8599', system: 'HVAC Return', material: 'Aluminum', size: '24x24' }),
     c({ name: 'VAV Box', type: 'count', color: '#9c36b5', system: 'HVAC Supply', material: 'Terminal unit' }),
+    c({ name: 'Tee 3/4" Copper', type: 'count', color: '#a61e4d', system: 'Domestic Cold Water', material: 'Wrot copper', size: '3/4"' }),
+    c({ name: 'Reducer 3/4"x1/2" Copper', type: 'count', color: '#d6336c', system: 'Domestic Water', material: 'Wrot copper', size: '3/4"x1/2"' }),
+    c({ name: 'Duct Transition', type: 'count', color: '#d9480f', system: 'HVAC Supply', material: 'Galvanized steel' }),
+    c({ name: 'Fire Damper', type: 'count', color: '#c92a2a', system: 'HVAC Supply', material: 'UL 555 fire damper' }),
     c({ name: 'Ball Valve 3/4"', type: 'count', color: '#862e9c', system: 'Domestic Cold Water', material: 'Bronze', size: '3/4"' }),
     c({ name: 'Duct Wrap Insulation', type: 'area', color: '#0b7285', system: 'Insulation', material: 'Fiberglass 1-1/2" FSK', waste: 10 })
   ];
@@ -272,8 +282,15 @@ function breakdown(it) {
   const c = condById(it.cond) || {};
   const r = qty(it);
   const waste = +c.waste || 0;
+  let el90 = 0, el45 = 0, drops = 0, vert = 0;
+  if (it.type === 'linear') {
+    const t = turns(it.points); el90 = t.el90; el45 = t.el45;
+    drops = Math.max(0, Math.round(+it.drops || 0)); vert = Math.max(0, +it.vert || 0);
+    el90 += drops;                                     // each drop/riser adds a 90° elbow
+    if (r.ok) r.q += vert;                             // vertical length counts toward the run
+  }
   const qw = r.q * (1 + waste / 100);
-  const o = { q: r.q, unit: r.unit, ok: r.ok, qw, pieces: '', sheet: '', gauge: '', weight: '', hangers: '', cost: (+c.price || 0) * qw, per: r.per };
+  const o = { q: r.q, unit: r.unit, ok: r.ok, qw, pieces: '', sheet: '', gauge: '', weight: '', hangers: '', el90, el45, drops, vert, mainCost: (+c.price || 0) * qw, per: r.per, asm: [] };
   if (it.type === 'linear' && r.ok) {
     if (+c.piece > 0) o.pieces = Math.ceil(qw / c.piece - 1e-9);
     if (+c.hanger > 0) o.hangers = Math.ceil(r.q / c.hanger - 1e-9);
@@ -288,8 +305,23 @@ function breakdown(it) {
       o.weight = S.units === 'imperial' ? lb : lb * 0.45359;
     }
   }
+  const basis = { qty: r.ok ? qw : 0, sheet: +o.sheet || 0, hanger: +o.hangers || 0, el90, el45, elbow: el90 + el45, piece: +o.pieces || 0, drop: drops };
+  o.asm = (c.asm || []).map(a => { const q = (+a.f || 0) * (basis[a.base] || 0); return { name: a.name, unit: a.unit, price: +a.price || 0, q, cost: q * (+a.price || 0) }; }).filter(a => a.q > 0);
+  o.cost = o.mainCost + o.asm.reduce((s, a) => s + a.cost, 0);
   return o;
 }
+// Count direction changes along a run: ~45° turns and ~90° turns (anything sharper counts as 90°)
+function turns(pts) {
+  let el90 = 0, el45 = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = [pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]], b = [pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]];
+    const la = Math.hypot(...a), lb = Math.hypot(...b); if (!la || !lb) continue;
+    const ang = Math.acos(Math.max(-1, Math.min(1, (a[0] * b[0] + a[1] * b[1]) / (la * lb)))) * 180 / Math.PI;
+    if (ang < 15) continue; if (ang < 67.5) el45++; else el90++;
+  }
+  return { el90, el45 };
+}
+const ASM_BASES = [['qty', 'por unidad medida (LF/SF/EA)'], ['sheet', 'por unidad de lámina (ft²)'], ['hanger', 'por soporte'], ['el90', 'por codo 90°'], ['el45', 'por codo 45°'], ['elbow', 'por codo (cualquiera)'], ['piece', 'por tramo/pieza'], ['drop', 'por drop/riser']];
 const isMeasure = it => it.type === 'linear' || it.type === 'area' || it.type === 'count';
 
 /* ---------- Formatting ---------- */
@@ -485,6 +517,7 @@ function drawOverlay() {
     if (it.type === 'linear') {
       h += `<g data-id="${it.id}"><polyline points="${P}" fill="none" stroke="transparent" stroke-width="14" vector-effect="non-scaling-stroke"/>`;
       h += `<polyline points="${P}" fill="none" stroke="${col}" stroke-width="${sw}" ${dash} stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity=".9"/>`;
+      for (let k = 1; k < it.points.length - 1; k++) { const t = turns(it.points.slice(k - 1, k + 2)); if (t.el90 || t.el45) h += `<circle cx="${it.points[k][0]}" cy="${it.points[k][1]}" r="${r * .55}" fill="#fff" stroke="${col}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`; }
       const last = it.points[it.points.length - 1];
       h += `<text x="${last[0] + r}" y="${last[1] - r}" font-size="${fs}" fill="${col}">${esc(fmtQty(breakdown(it)))}</text></g>`;
     } else if (it.type === 'area') {
@@ -781,7 +814,11 @@ function editCondition(id, forceType) {
     <label>Desperdicio (%)</label><input type="number" id="fWaste" value="${c.waste}" step="any">
     <label>Precio unitario</label><input type="number" id="fPrice" value="${c.price}" step="any">
     <div class="hint">Precio por ${c.type === 'count' ? 'pieza' : c.type === 'area' ? u.area : u.len}, se multiplica por la cantidad con desperdicio.</div>
-  </div>`, [
+  </div>
+  <h4 style="margin:16px 0 4px">Ensamble: materiales que salen de esta condición</h4>
+  <div class="hint" style="color:var(--muted);font-size:12px;margin-bottom:6px">Cada material se calcula con un factor. Ejemplo: 2 colgadores por soporte, o 1 codo por cada codo 90°.</div>
+  <div id="asmRows"></div>
+  <button id="asmAdd" type="button" style="margin-top:6px">+ Agregar material</button>`, [
     ...(isNew ? [] : [{ t: 'Eliminar', danger: true, f: () => {
       if (used && !confirmDelete) { toast('Esta condición tiene mediciones. Pulsa Eliminar otra vez para borrarla junto con sus mediciones.'); confirmDelete = true; return false; }
       confirmDelete = false; pushUndo();
@@ -794,7 +831,7 @@ function editCondition(id, forceType) {
       const name = $('#fName').value.trim();
       if (!name) { toast('Ponle un nombre a la condición'); return false; }
       pushUndo();
-      Object.assign(c, { name, type: $('#fType').value, color: $('#fColor').value, system: $('#fSystem').value.trim(), material: $('#fMat').value.trim(), size: $('#fSize').value.trim(), shape: $('#fShape').value, w: +$('#fW').value || 0, h: +$('#fH').value || 0, d: +$('#fD').value || 0, gauge: $('#fGauge').value, piece: +$('#fPiece').value || 0, hanger: +$('#fHanger').value || 0, waste: +$('#fWaste').value || 0, price: +$('#fPrice').value || 0 });
+      Object.assign(c, { name, type: $('#fType').value, color: $('#fColor').value, system: $('#fSystem').value.trim(), material: $('#fMat').value.trim(), size: $('#fSize').value.trim(), shape: $('#fShape').value, w: +$('#fW').value || 0, h: +$('#fH').value || 0, d: +$('#fD').value || 0, gauge: $('#fGauge').value, asm: readAsm(), piece: +$('#fPiece').value || 0, hanger: +$('#fHanger').value || 0, waste: +$('#fWaste').value || 0, price: +$('#fPrice').value || 0 });
       if (c.type !== 'linear') c.shape = 'none';
       if (isNew) S.conditions.push(c); else S.conditions[S.conditions.findIndex(x => x.id === id)] = c;
       S.activeCond = c.id;
@@ -811,6 +848,21 @@ function editCondition(id, forceType) {
     document.querySelectorAll('#modal .round').forEach(e => e.style.display = lin && sh === 'round' ? '' : 'none');
   };
   $('#fType').addEventListener('change', sync); $('#fShape').addEventListener('change', sync); sync();
+  $('#modal').style.maxWidth = '760px';
+  (c.asm || []).forEach(addAsmRow);
+  $('#asmAdd').addEventListener('click', () => addAsmRow({ name: '', f: 1, base: 'qty', unit: 'EA', price: 0 }));
+}
+function addAsmRow(a) {
+  const row = document.createElement('div');
+  row.className = 'asmRow';
+  row.innerHTML = `<input type="text" class="aName" placeholder="Material" value="${esc(a.name)}"><input type="number" class="aF" step="any" value="${+a.f || 0}" title="Factor">
+    <select class="aBase" title="Por">${ASM_BASES.map(([v, l]) => `<option value="${v}" ${v === a.base ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    <input type="text" class="aUnit" value="${esc(a.unit)}" title="Unidad"><input type="number" class="aPrice" step="any" value="${+a.price || 0}" title="Precio unit."><button type="button" class="aDel" title="Quitar">✕</button>`;
+  row.querySelector('.aDel').addEventListener('click', () => row.remove());
+  $('#asmRows').appendChild(row);
+}
+function readAsm() {
+  return [...document.querySelectorAll('#asmRows .asmRow')].map(r => ({ name: r.querySelector('.aName').value.trim(), f: +r.querySelector('.aF').value || 0, base: r.querySelector('.aBase').value, unit: r.querySelector('.aUnit').value.trim() || 'EA', price: +r.querySelector('.aPrice').value || 0 })).filter(a => a.name);
 }
 let confirmDelete = false;
 
@@ -826,13 +878,27 @@ function summaryRows() {
   S.items.filter(isMeasure).forEach(it => {
     const c = condById(it.cond); if (!c) return;
     const b = breakdown(it);
-    const r = g[c.id] || (g[c.id] = { c, q: 0, qw: 0, pieces: 0, sheet: 0, weight: 0, hangers: 0, cost: 0, n: 0, nocal: 0 });
+    const r = g[c.id] || (g[c.id] = { c, q: 0, qw: 0, pieces: 0, sheet: 0, weight: 0, hangers: 0, el90: 0, el45: 0, cost: 0, n: 0, nocal: 0 });
     r.n++; if (!b.ok) { r.nocal++; return; }
-    r.q += b.q; r.qw += b.qw; r.pieces += +b.pieces || 0; r.sheet += +b.sheet || 0; r.weight += +b.weight || 0; r.hangers += +b.hangers || 0; r.cost += b.cost;
+    r.q += b.q; r.qw += b.qw; r.pieces += +b.pieces || 0; r.sheet += +b.sheet || 0; r.weight += +b.weight || 0; r.hangers += +b.hangers || 0; r.el90 += b.el90; r.el45 += b.el45; r.cost += b.cost;
   });
   // recompute pieces from the total (cutting from shared stock) instead of summing per run
   Object.values(g).forEach(r => { if (r.c.type === 'linear' && +r.c.piece > 0) r.pieces = Math.ceil(r.qw / r.c.piece - 1e-9); });
   return S.conditions.map(c => g[c.id]).filter(Boolean);
+}
+// Bill of materials: every condition's own material plus its assembly materials, merged by name + unit
+function bomRows() {
+  const m = new Map();
+  const add = (name, unit, q, price, cost, from) => {
+    const k = name + '|' + unit; const r = m.get(k) || { name, unit, q: 0, price, cost: 0, from: new Set() };
+    r.q += q; r.cost += cost; if (price) r.price = price; r.from.add(from); m.set(k, r);
+  };
+  S.items.filter(isMeasure).forEach(it => {
+    const c = condById(it.cond); if (!c) return; const b = breakdown(it); if (!b.ok) return;
+    add(c.name, b.unit, b.qw, +c.price || 0, b.mainCost, c.name);
+    b.asm.forEach(a => add(a.name, a.unit, a.q, a.price, a.cost, c.name));
+  });
+  return [...m.values()].map(r => { const whole = /^(EA|pza)$/i.test(r.unit); const q = whole ? Math.ceil(r.q - 1e-9) : r.q; return { ...r, q, cost: r.price ? q * r.price : r.cost, whole, from: [...r.from].join(', ') }; });
 }
 function unitOf(c) { return c.type === 'count' ? 'pza' : c.type === 'area' ? U().area : U().len; }
 function renderTable() {
@@ -841,36 +907,48 @@ function renderTable() {
     const rows = detailRows();
     if (!rows.length) { w.innerHTML = `<p style="padding:12px;color:var(--muted)">Aún no hay mediciones. Elige una condición a la izquierda y mide sobre el plano.</p>`; return; }
     const opts = (it) => S.conditions.filter(c => c.type === it.type).map(c => `<option value="${c.id}" ${c.id === it.cond ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
-    w.innerHTML = `<table><thead><tr><th>#</th><th>Pág.</th><th>Condición</th><th>Tipo</th><th class="n">Cantidad</th><th class="n">C/desperdicio</th><th class="n">Piezas</th><th class="n">Lámina (${U().area})</th><th class="n">Cal.</th><th class="n">Peso (${U().wt})</th><th class="n">Soportes</th><th class="n">Costo</th><th></th></tr></thead><tbody>${rows.map(({ it, c, b, i }) => `
+    w.innerHTML = `<table><thead><tr><th>#</th><th>Pág.</th><th>Condición</th><th>Tipo</th><th class="n">Cantidad</th><th class="n">C/desperdicio</th><th class="n">Piezas</th><th class="n">Lámina (${U().area})</th><th class="n">Cal.</th><th class="n">Peso (${U().wt})</th><th class="n">Soportes</th><th class="n">Codos 90°</th><th class="n">Codos 45°</th><th class="n">Vertical (${U().len})</th><th class="n">Drops</th><th class="n">Costo</th><th></th></tr></thead><tbody>${rows.map(({ it, c, b, i }) => `
       <tr data-id="${it.id}" class="${S.selected === it.id ? 'sel' : ''}"><td>${i}</td><td>${it.page}</td>
       <td><span class="sw" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${esc(c.color)};margin-right:5px"></span><select data-cond="${it.id}">${opts(it)}</select></td>
       <td>${typeName[it.type]}</td>
       <td class="n">${b.ok ? esc(fmtQty(b)) : '<span class="nocal">sin escala</span>'}</td>
       <td class="n">${b.ok ? nf(b.qw, b.unit === 'pza' ? 0 : 2) + ' ' + b.unit : ''}</td><td class="n">${b.pieces}</td><td class="n">${b.sheet === '' ? '' : nf(b.sheet)}</td><td class="n">${b.gauge}</td><td class="n">${b.weight === '' ? '' : nf(b.weight, 0)}</td><td class="n">${b.hangers}</td>
+      <td class="n">${it.type === 'linear' ? b.el90 : ''}</td><td class="n">${it.type === 'linear' ? b.el45 : ''}</td>
+      <td class="n">${it.type === 'linear' ? `<input type="number" min="0" step="any" data-vert="${it.id}" value="${+it.vert || 0}" style="width:64px;text-align:right">` : ''}</td>
+      <td class="n">${it.type === 'linear' ? `<input type="number" min="0" step="1" data-drops="${it.id}" value="${+it.drops || 0}" style="width:52px;text-align:right">` : ''}</td>
       <td class="n">${b.cost ? '$' + nf(b.cost) : ''}</td><td><button data-del="${it.id}" title="Eliminar">✕</button></td></tr>`).join('')}</tbody></table>`;
+  } else if (S.tab === 'bom') {
+    const rows = bomRows();
+    if (!rows.length) { w.innerHTML = `<p style="padding:12px;color:var(--muted)">La lista de materiales aparece cuando tengas mediciones con escala.</p>`; return; }
+    const total = rows.reduce((s, r) => s + r.cost, 0);
+    w.innerHTML = `<table><thead><tr><th>Material</th><th class="n">Cantidad</th><th>Unidad</th><th class="n">Precio unit.</th><th class="n">Costo</th><th>Origen</th></tr></thead><tbody>${rows.map(r => `
+      <tr><td>${esc(r.name)}</td><td class="n">${nf(r.q, r.whole ? 0 : 2)}</td><td>${esc(r.unit)}</td><td class="n">${r.price ? '$' + nf(r.price) : ''}</td><td class="n">${r.cost ? '$' + nf(r.cost) : ''}</td><td style="color:var(--muted)">${esc(r.from)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="4">Total</td><td class="n">${total ? '$' + nf(total) : ''}</td><td></td></tr></tfoot></table>`;
   } else {
     const rows = summaryRows();
     if (!rows.length) { w.innerHTML = `<p style="padding:12px;color:var(--muted)">El resumen aparece cuando tengas mediciones.</p>`; return; }
     const total = rows.reduce((s, r) => s + r.cost, 0);
-    w.innerHTML = `<table><thead><tr><th>Condición</th><th>Sistema</th><th>Material</th><th>Tamaño</th><th class="n">Mediciones</th><th class="n">Cantidad</th><th>Unidad</th><th class="n">Desp. %</th><th class="n">C/desperdicio</th><th class="n">Piezas</th><th class="n">Lámina (${U().area})</th><th class="n">Cal.</th><th class="n">Peso (${U().wt})</th><th class="n">Soportes</th><th class="n">Costo</th></tr></thead><tbody>${rows.map(r => `
+    w.innerHTML = `<table><thead><tr><th>Condición</th><th>Sistema</th><th>Material</th><th>Tamaño</th><th class="n">Mediciones</th><th class="n">Cantidad</th><th>Unidad</th><th class="n">Desp. %</th><th class="n">C/desperdicio</th><th class="n">Piezas</th><th class="n">Lámina (${U().area})</th><th class="n">Cal.</th><th class="n">Peso (${U().wt})</th><th class="n">Soportes</th><th class="n">Codos 90°</th><th class="n">Codos 45°</th><th class="n">Costo</th></tr></thead><tbody>${rows.map(r => `
       <tr><td><span class="sw" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${esc(r.c.color)};margin-right:5px"></span>${esc(r.c.name)}${r.nocal ? ` <span class="nocal" title="Mediciones en páginas sin escala">(${r.nocal} sin escala)</span>` : ''}</td>
       <td>${esc(r.c.system)}</td><td>${esc(r.c.material)}</td><td>${esc(sizeLabel(r.c))}</td><td class="n">${r.n}</td>
       <td class="n">${r.c.type === 'count' ? r.q : nf(r.q)}</td><td>${unitOf(r.c)}</td><td class="n">${r.c.waste || 0}</td><td class="n">${r.c.type === 'count' ? nf(r.qw, 0) : nf(r.qw)}</td>
       <td class="n">${r.c.type === 'linear' && r.c.piece ? r.pieces + ` <small style="color:var(--muted)">× ${r.c.piece} ${U().len}</small>` : ''}</td>
-      <td class="n">${r.sheet ? nf(r.sheet) : ''}</td><td class="n">${gaugeOf(r.c)}</td><td class="n">${r.weight ? nf(r.weight, 0) : ''}</td><td class="n">${r.hangers || ''}</td><td class="n">${r.cost ? '$' + nf(r.cost) : ''}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><td colspan="14">Total</td><td class="n">${total ? '$' + nf(total) : ''}</td></tr></tfoot></table>`;
+      <td class="n">${r.sheet ? nf(r.sheet) : ''}</td><td class="n">${gaugeOf(r.c)}</td><td class="n">${r.weight ? nf(r.weight, 0) : ''}</td><td class="n">${r.hangers || ''}</td><td class="n">${r.c.type === 'linear' ? r.el90 : ''}</td><td class="n">${r.c.type === 'linear' ? r.el45 : ''}</td><td class="n">${r.cost ? '$' + nf(r.cost) : ''}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="16">Total</td><td class="n">${total ? '$' + nf(total) : ''}</td></tr></tfoot></table>`;
   }
 }
 $('#tableWrap').addEventListener('click', e => {
   const del = e.target.closest('[data-del]');
   if (del) { S.selected = del.dataset.del; deleteSelected(); return; }
-  if (e.target.closest('select')) return;
+  if (e.target.closest('select,input')) return;
   const tr = e.target.closest('tr[data-id]');
   if (!tr) return;
   const it = S.items.find(x => x.id === tr.dataset.id);
   if (it.page !== S.pageNum) gotoPage(it.page).then(() => select(it.id)); else select(it.id);
 });
 $('#tableWrap').addEventListener('change', e => {
+  const v = e.target.closest('[data-vert],[data-drops]');
+  if (v) { pushUndo(); const it = S.items.find(x => x.id === (v.dataset.vert || v.dataset.drops)); it[v.dataset.vert ? 'vert' : 'drops'] = Math.max(0, +v.value || 0); refresh(); return; }
   const s = e.target.closest('[data-cond]'); if (!s) return;
   pushUndo(); S.items.find(x => x.id === s.dataset.cond).cond = s.value; refresh();
 });
@@ -900,6 +978,7 @@ $('#unitsSel').addEventListener('change', e => {
   const f = to === 'metric' ? 0.3048 : 1 / 0.3048;          // length base factor
   const fs = to === 'metric' ? 25.4 : 1 / 25.4;              // size factor (in <-> mm)
   Object.values(S.pages).forEach(p => { if (p.cal) p.cal *= f; });
+  S.items.forEach(it => { if (it.vert) it.vert = +(it.vert * f).toFixed(3); });
   S.conditions.forEach(c => {
     c.piece = +(c.piece * f).toFixed(3); c.hanger = +(c.hanger * f).toFixed(3);
     c.w = +(c.w * fs).toFixed(2); c.h = +(c.h * fs).toFixed(2); c.d = +(c.d * fs).toFixed(2);
@@ -917,6 +996,7 @@ function detailSheetRows() {
     'Cantidad': b.ok ? +b.q.toFixed(3) : null, 'Unidad': b.unit, 'Desperdicio %': c.waste || 0, 'Cant. c/desperdicio': b.ok ? +b.qw.toFixed(3) : null,
     'Piezas': b.pieces === '' ? null : b.pieces, ['Largo pieza (' + u.len + ')']: it.type === 'linear' && c.piece ? c.piece : null,
     ['Lámina (' + u.area + ')']: b.sheet === '' ? null : +b.sheet.toFixed(2), 'Calibre': b.gauge || null, ['Peso (' + u.wt + ')']: b.weight === '' ? null : Math.round(b.weight), 'Soportes': b.hangers === '' ? null : b.hangers,
+    'Codos 90°': it.type === 'linear' ? b.el90 : null, 'Codos 45°': it.type === 'linear' ? b.el45 : null, ['Vertical (' + u.len + ')']: it.type === 'linear' ? b.vert : null, 'Drops': it.type === 'linear' ? b.drops : null,
     'Precio unit.': c.price || null, 'Costo': b.cost ? +b.cost.toFixed(2) : null, 'Escala': (S.pages[it.page] || {}).calLabel || 'sin calibrar'
   }));
 }
@@ -926,7 +1006,7 @@ function summarySheetRows() {
     'Condición': r.c.name, 'Sistema': r.c.system, 'Material': r.c.material, 'Tamaño': sizeLabel(r.c), 'Tipo': typeName[r.c.type], 'Mediciones': r.n,
     'Cantidad': +r.q.toFixed(3), 'Unidad': unitOf(r.c), 'Desperdicio %': r.c.waste || 0, 'Cant. c/desperdicio': +r.qw.toFixed(3),
     'Piezas': r.c.type === 'linear' && r.c.piece ? r.pieces : null, ['Largo pieza (' + u.len + ')']: r.c.type === 'linear' && r.c.piece ? r.c.piece : null,
-    ['Lámina (' + u.area + ')']: r.sheet ? +r.sheet.toFixed(2) : null, 'Calibre': gaugeOf(r.c) || null, ['Peso (' + u.wt + ')']: r.weight ? Math.round(r.weight) : null, 'Soportes': r.hangers || null, 'Precio unit.': r.c.price || null, 'Costo': r.cost ? +r.cost.toFixed(2) : null,
+    ['Lámina (' + u.area + ')']: r.sheet ? +r.sheet.toFixed(2) : null, 'Calibre': gaugeOf(r.c) || null, ['Peso (' + u.wt + ')']: r.weight ? Math.round(r.weight) : null, 'Soportes': r.hangers || null, 'Codos 90°': r.c.type === 'linear' ? r.el90 : null, 'Codos 45°': r.c.type === 'linear' ? r.el45 : null, 'Precio unit.': r.c.price || null, 'Costo': r.cost ? +r.cost.toFixed(2) : null,
     'Sin escala': r.nocal || null
   }));
 }
@@ -943,7 +1023,8 @@ const EN = { '#': '#', 'Página': 'Sheet', 'Condición': 'Item', 'Sistema': 'Sys
   'Precio unit.': 'Unit Price', 'Costo': 'Cost', 'Escala': 'Scale', 'Mediciones': 'Takeoffs', 'Sin escala': 'Not Scaled', 'Nombre': 'Name', 'Color': 'Color', 'Forma': 'Shape', 'Ancho': 'Width', 'Alto': 'Height',
   'Diámetro': 'Diameter', 'Soporte cada': 'Hanger Spacing', 'Total': 'Total', 'Proyecto': 'Project', 'Plano': 'Drawing', 'Unidades': 'Units', 'Fecha': 'Date', 'Generado con': 'Generated with',
   'Resumen': 'Summary', 'Detalle': 'Detail', 'Condiciones': 'Conditions', 'Lineal': 'Linear', 'Área': 'Area', 'Conteo': 'Count', 'Rectangular': 'Rectangular', 'Redondo': 'Round', 'Imperial': 'Imperial', 'Métrico': 'Metric',
-  'sin calibrar': 'not calibrated' };
+  'sin calibrar': 'not calibrated', 'Codos 90°': '90° Elbows', 'Codos 45°': '45° Elbows', 'Vertical': 'Vertical', 'Drops': 'Drops', 'Materiales': 'Bill of Materials', 'Ensambles': 'Assemblies',
+  'Factor': 'Factor', 'Por': 'Per', 'Origen': 'Used In' };
 const EN_UNIT = { 'ft': 'LF', 'ft²': 'SF', 'pza': 'EA', 'm': 'm', 'm²': 'm²' };
 const expEN = () => $('#expLang').value === 'en';
 const T = s => expEN() ? (EN[s] || s) : s;
@@ -955,6 +1036,11 @@ function trVal(v) {
   return EN[v] || v;
 }
 const trRows = rows => expEN() ? rows.map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [trKey(k), trVal(v)]))) : rows;
+function bomSheetRows() { return bomRows().map(r => ({ 'Material': r.name, 'Cantidad': r.whole ? r.q : +r.q.toFixed(2), 'Unidad': r.unit, 'Precio unit.': r.price || null, 'Costo': r.cost ? +r.cost.toFixed(2) : null, 'Origen': r.from })); }
+function asmSheetRows() {
+  const out = []; S.conditions.forEach(c => (c.asm || []).forEach(a => out.push({ 'Condición': c.name, 'Material': a.name, 'Factor': a.f, 'Por': a.base, 'Unidad': a.unit, 'Precio unit.': a.price || null })));
+  return out;
+}
 function baseName() { return (S.fileName || 'takeoff').replace(/\.pdf$/i, ''); }
 function sheetFrom(rows) {
   const ws = XLSX.utils.json_to_sheet(rows);
@@ -972,20 +1058,29 @@ $('#btnXlsx').addEventListener('click', () => {
   ws[`${L}${sum.length + 2}`] = { t: 'n', f: `SUM(${L}2:${L}${sum.length + 1})` };
   ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: sum.length + 1, c: cols.length - 1 } });
   XLSX.utils.book_append_sheet(wb, ws, T('Resumen'));
+  const bom = trRows(bomSheetRows());
+  if (bom.length) {
+    const wsB = sheetFrom(bom); const bc = Object.keys(bom[0]); const BL = XLSX.utils.encode_col(bc.indexOf(T('Costo')));
+    XLSX.utils.sheet_add_aoa(wsB, [[T('Total')]], { origin: { r: bom.length + 1, c: 0 } });
+    wsB[`${BL}${bom.length + 2}`] = { t: 'n', f: `SUM(${BL}2:${BL}${bom.length + 1})` };
+    wsB['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: bom.length + 1, c: bc.length - 1 } });
+    XLSX.utils.book_append_sheet(wb, wsB, T('Materiales'));
+  }
   XLSX.utils.book_append_sheet(wb, sheetFrom(trRows(detailSheetRows())), T('Detalle'));
   XLSX.utils.book_append_sheet(wb, sheetFrom(trRows(conditionSheetRows())), T('Condiciones'));
+  const asm = trRows(asmSheetRows()); if (asm.length) XLSX.utils.book_append_sheet(wb, sheetFrom(asm), T('Ensambles'));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[T('Proyecto'), baseName()], [T('Plano'), S.fileName], [T('Unidades'), T(S.units === 'imperial' ? 'Imperial' : 'Métrico')], [T('Fecha'), new Date().toLocaleString('en-US')], [T('Generado con'), 'SmartTakeoff']]), 'Info');
   XLSX.writeFile(wb, baseName() + '_takeoff.xlsx');
   toast('Excel exportado');
 });
 $('#btnCsv').addEventListener('click', () => {
-  const rows = trRows(S.tab === 'summary' ? summarySheetRows() : detailSheetRows());
+  const rows = trRows(S.tab === 'summary' ? summarySheetRows() : S.tab === 'bom' ? bomSheetRows() : detailSheetRows());
   if (!rows.length) { toast('No hay mediciones para exportar'); return; }
   const csv = XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(rows));
-  download(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), baseName() + (S.tab === 'summary' ? '_resumen' : '_detalle') + '.csv');
+  download(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), baseName() + (S.tab === 'summary' ? '_resumen' : S.tab === 'bom' ? '_materiales' : '_detalle') + '.csv');
 });
 $('#btnCopy').addEventListener('click', async () => {
-  const rows = trRows(S.tab === 'summary' ? summarySheetRows() : detailSheetRows());
+  const rows = trRows(S.tab === 'summary' ? summarySheetRows() : S.tab === 'bom' ? bomSheetRows() : detailSheetRows());
   if (!rows.length) { toast('No hay mediciones para copiar'); return; }
   const tsv = XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(rows), { FS: '\t' });
   try { await navigator.clipboard.writeText(tsv); toast('Tabla copiada. Pégala en Excel con Ctrl+V'); } catch (e) { toast('El navegador no permitió copiar'); }
@@ -1013,9 +1108,20 @@ $('#fileCond').addEventListener('change', async e => {
         piece: +pick(r, /^largo pieza|piece/i) || 0, hanger: +pick(r, /^soporte|hanger/i) || 0, waste: +pick(r, /^desperd|waste/i) || 0, price: +pick(r, /^precio|price|costo unit/i) || 0 };
       if (!/^(auto|16|18|20|22|24|26)$/.test(c.gauge)) c.gauge = 'auto';
       const ex = S.conditions.find(x => x.name.toLowerCase() === name.toLowerCase());
-      if (ex) Object.assign(ex, c, { id: ex.id, type: ex.type }); else S.conditions.push(c);
+      if (ex) Object.assign(ex, c, { id: ex.id, type: ex.type, asm: ex.asm || [] }); else S.conditions.push(c);
       n++;
     });
+    const wsA = wb.Sheets['Ensambles'] || wb.Sheets['Assemblies'];
+    if (wsA) {
+      const ar = XLSX.utils.sheet_to_json(wsA, { defval: '' }); const touched = new Set();
+      ar.forEach(r => {
+        const cn = String(pick(r, /^(condici|item|condition)/i)).trim(), mn = String(pick(r, /^material/i)).trim(); if (!cn || !mn) return;
+        const c = S.conditions.find(x => x.name.toLowerCase() === cn.toLowerCase()); if (!c) return;
+        if (!touched.has(c.id)) { c.asm = []; touched.add(c.id); }
+        const base = String(pick(r, /^(por|per)$/i)).trim();
+        c.asm.push({ name: mn, f: +pick(r, /^factor/i) || 0, base: ASM_BASES.some(b => b[0] === base) ? base : 'qty', unit: String(pick(r, /^(unidad|unit)$/i) || 'EA'), price: +pick(r, /^precio|price/i) || 0 });
+      });
+    }
     refresh(); toast(n ? `${n} condición(es) importadas o actualizadas` : 'No encontré filas con columna “Nombre”');
   } catch (err) { console.error(err); toast('No se pudo leer el archivo: ' + err.message); }
 });
@@ -1116,7 +1222,14 @@ const UI_EN = {
   'No hay mediciones para exportar': 'No takeoffs to export', 'Excel exportado': 'Excel exported', 'No hay mediciones para copiar': 'No takeoffs to copy', 'El navegador no permitió copiar': 'The browser blocked copying',
   'No encontré filas con columna “Nombre”': 'No rows with a “Name” column were found', 'Abre un plano primero': 'Open a drawing first', 'Proyecto cargado': 'Project loaded',
   'Suelta un archivo PDF': 'Drop a PDF file', 'Se restauró el takeoff guardado de este plano': 'Restored the saved takeoff for this drawing',
-  'Tabla copiada. Pégala en Excel con Ctrl+V': 'Table copied. Paste it into Excel with Ctrl+V', 'Calibrada': 'Calibrated'
+  'Tabla copiada. Pégala en Excel con Ctrl+V': 'Table copied. Paste it into Excel with Ctrl+V', 'Calibrada': 'Calibrated',
+  'Materiales': 'Bill of Materials', 'Codos 90°': '90° Elb.', 'Codos 45°': '45° Elb.', 'Vertical': 'Vertical', 'Drops': 'Drops', 'Precio unit.': 'Unit price', 'Origen': 'Used in',
+  'Ensamble: materiales que salen de esta condición': 'Assembly: materials generated by this condition',
+  'Cada material se calcula con un factor. Ejemplo: 2 colgadores por soporte, o 1 codo por cada codo 90°.': 'Each material uses a factor. Example: 2 straps per hanger, or 1 fitting per 90° elbow.',
+  '+ Agregar material': '+ Add material', 'Factor': 'Factor', 'Por': 'Per', 'Quitar': 'Remove',
+  'por unidad medida (LF/SF/EA)': 'per measured unit (LF/SF/EA)', 'por unidad de lámina (ft²)': 'per sheet metal SF', 'por soporte': 'per hanger', 'por codo 90°': 'per 90° elbow',
+  'por codo 45°': 'per 45° elbow', 'por codo (cualquiera)': 'per elbow (any)', 'por tramo/pieza': 'per stock piece', 'por drop/riser': 'per drop/riser',
+  'La lista de materiales aparece cuando tengas mediciones con escala.': 'The bill of materials appears once you have scaled takeoffs.'
 };
 const UI_PATTERNS = [
   [/^(Lineal|Área|Conteo)( · .*)$/, (m, a, b) => UI_EN[a] + b],
