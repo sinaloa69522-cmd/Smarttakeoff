@@ -26,6 +26,13 @@ La interfaz está **en inglés** por defecto; cambia a español con el selector 
 - Cada condición tiene un **ensamble**: materiales que salen solos con un factor (por LF, por ft² de lámina, por soporte, por codo, por tramo o por drop).
 - La pestaña **Materiales** (Bill of Materials) junta todo y se exporta a Excel junto con la hoja *Ensambles*, que puedes editar y volver a importar.
 
+## Estimado, precios y propuesta
+- Cada condición y cada material del ensamble tienen **horas de mano de obra por unidad**. Los valores que trae son solo de referencia; ajústalos a tu empresa.
+- La pestaña **Estimado** calcula materiales, impuesto, mano de obra (horas × tarifa), overhead, utilidad y el total de la oferta, con desglose por sistema.
+- **Exportar/Importar lista de precios**: descarga un Excel con todos los materiales, llena precios y horas, y vuelve a cargarlo.
+- **Generar propuesta** abre una propuesta lista para imprimir o guardar como PDF, con alcance por sistema, inclusiones, exclusiones y firmas.
+- El Excel incluye la hoja **Estimate** con fórmulas vivas.
+
 ## Condiciones
 Cada condición define sistema, material, tamaño, forma de ducto (ancho×alto o diámetro), largo de pieza, separación de soportes, % de desperdicio y precio unitario.
 Puedes editar la hoja *Condiciones* del Excel exportado y volver a cargarla con **Importar**.

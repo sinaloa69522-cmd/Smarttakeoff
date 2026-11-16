@@ -55,7 +55,7 @@ aside h3{margin:0;padding:10px 10px 6px;font-size:11px;text-transform:uppercase;
 .cond:hover .ed{visibility:visible}
 #pageList{max-height:28vh;overflow:auto;padding:0 6px 8px;display:flex;flex-wrap:wrap;gap:4px}
 #pageList button{min-width:36px}
-main{display:grid;grid-template-rows:1fr 230px;grid-template-columns:minmax(0,1fr);min-height:0;min-width:0}
+main{display:grid;grid-template-rows:1fr 6px var(--bottomH,260px);grid-template-columns:minmax(0,1fr);min-height:0;min-width:0}
 #viewer{position:relative;overflow:auto;background:var(--viewer);min-height:0}
 #stage{position:relative;margin:24px;display:inline-block;box-shadow:0 2px 12px rgba(0,0,0,.25);background:#fff}
 #pdfCanvas{display:block}
@@ -65,6 +65,8 @@ main{display:grid;grid-template-rows:1fr 230px;grid-template-columns:minmax(0,1f
 #empty h2{margin:0 0 6px;font-size:18px}
 #empty p{margin:0 0 14px;color:var(--muted)}
 #viewer.drag #empty .box{border-color:var(--accent)}
+#split{cursor:row-resize;background:var(--line)}
+#split:hover{background:var(--accent)}
 #bottom{background:var(--panel);border-top:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 #tabs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--line)}
 #tabs .sp{flex:1}
@@ -87,8 +89,19 @@ footer b{color:var(--ink);font-weight:600}
 .form input,.form select{width:100%}
 .form .row2{display:flex;gap:6px}
 .form .hint{grid-column:1/3;color:var(--muted);font-size:12px;margin-top:-2px}
-.asmRow{display:grid;grid-template-columns:minmax(0,2.2fr) 64px minmax(0,1.6fr) 56px 76px auto;gap:5px;margin-bottom:5px}
+.asmRow{display:grid;grid-template-columns:minmax(0,2.2fr) 60px minmax(0,1.6fr) 52px 70px 60px auto;gap:5px;margin-bottom:5px}
 .asmRow input,.asmRow select{min-width:0}
+.asmHdr{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
+.est{display:flex;flex-wrap:wrap;gap:18px;padding:10px 12px;align-items:flex-start}
+.estCol{display:flex;flex-direction:column;gap:8px;min-width:280px}
+.estForm{grid-template-columns:180px 90px}
+.estBtns{display:flex;gap:6px;flex-wrap:wrap}
+.estTot{width:auto;min-width:300px}
+.estTot td{white-space:nowrap}
+.estTot tr.sub td{font-weight:600;border-top:2px solid var(--line)}
+.estTot tr.grand td{font-weight:700;font-size:15px;border-top:2px solid var(--ink);color:var(--accent)}
+.estSys{width:auto;min-width:420px}
+textarea{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 6px;width:100%;resize:vertical}
 .actions{display:flex;justify-content:flex-end;gap:6px;margin-top:14px}
 #toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60;max-width:90vw}
 #toast.show{opacity:.95}
@@ -141,6 +154,7 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
   <aside>
     <h3>Condiciones <span><button id="btnImportCond" title="Importar condiciones desde Excel">Importar</button> <button id="btnNewCond" class="primary" title="Nueva condición">+ Nueva</button></span></h3>
     <input id="fileCond" type="file" accept=".xlsx,.xls,.csv" hidden>
+    <input id="filePrice" type="file" accept=".xlsx,.xls,.csv" hidden>
     <div id="condList"></div>
     <h3>Páginas <span id="pageInfo"></span></h3>
     <div id="pageList"></div>
@@ -160,11 +174,13 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
         </div>
       </div>
     </div>
+    <div id="split" title="Arrastra para cambiar el tamaño"></div>
     <div id="bottom">
       <div id="tabs">
         <button data-tab="detail" class="on">Detalle</button>
         <button data-tab="summary">Resumen / despiece</button>
         <button data-tab="bom">Materiales</button>
+        <button data-tab="estimate">Estimado</button>
         <span class="sp"></span>
         <select id="expLang" title="Idioma de la exportación"><option value="en">Export in English</option><option value="es">Exportar en español</option></select>
         <button id="btnCopy" title="Copiar la tabla para pegar en Excel">Copiar para Excel</button>
@@ -246,7 +262,19 @@ function presetConditions() {
     c({ name: 'Fire Damper', type: 'count', color: '#c92a2a', system: 'HVAC Supply', material: 'UL 555 fire damper' }),
     c({ name: 'Ball Valve 3/4"', type: 'count', color: '#862e9c', system: 'Domestic Cold Water', material: 'Bronze', size: '3/4"' }),
     c({ name: 'Duct Wrap Insulation', type: 'area', color: '#0b7285', system: 'Insulation', material: 'Fiberglass 1-1/2" FSK', waste: 10 })
-  ];
+  ].map(applyDefaultLabor);
+}
+// Reference labor units (hours per unit). Starting points only: every company should set its own.
+const LABOR_MAIN = { 'Supply Duct 24x12': 0.35, 'Return Duct 20x10': 0.3, 'Round Duct 10"': 0.2, 'Flex Duct 8"': 0.08, 'Copper Type L 3/4"': 0.12, 'Copper Type L 1/2" HW': 0.1, 'PEX 1/2"': 0.04,
+  'Black Steel 2" Sch 40': 0.25, 'PVC DWV 4"': 0.15, 'Cast Iron No-Hub 4"': 0.2, 'Supply Diffuser 24x24': 1, 'Return Grille 24x24': 0.75, 'VAV Box': 4, 'Tee 3/4" Copper': 0.35,
+  'Reducer 3/4"x1/2" Copper': 0.25, 'Duct Transition': 1, 'Fire Damper': 2, 'Ball Valve 3/4"': 0.4, 'Duct Wrap Insulation': 0.03 };
+const LABOR_ASM = [[/^Elbow .*copper/i, 0.25], [/^Elbow .*Sch 40/i, 0.75], [/^Elbow .*PEX/i, 0.1], [/^Elbow .*round/i, 0.5], [/^Elbow .*\d+x\d+/i, 1], [/bend .*PVC/i, 0.4], [/bend .*no-hub/i, 0.4],
+  [/^Coupling .*copper/i, 0.2], [/^Coupling .*Sch 40/i, 0.6], [/^Coupling .*PVC/i, 0.25], [/^No-hub coupling/i, 0.3], [/^Clevis hanger/i, 0.3], [/^Pipe insulation/i, 0.05], [/^Hanger strap/i, 0.15],
+  [/^Duct wrap/i, 0.03], [/^Flex duct 8/i, 0.08], [/^Spin-in collar/i, 0.3], [/^PEX (crimp|clip)/i, 0.05], [/^Flex duct clamp/i, 0.05], [/^Flex duct strap/i, 0.1]];
+function applyDefaultLabor(c) {
+  c.labor = LABOR_MAIN[c.name] || 0;
+  (c.asm || []).forEach(a => { const m = LABOR_ASM.find(([re]) => re.test(a.name)); a.lab = m ? m[1] : 0; });
+  return c;
 }
 // Galvanized sheet weight, lb/ft² (incl. zinc coating)
 const GA_LB = { 26: 0.906, 24: 1.156, 22: 1.406, 20: 1.656, 18: 2.156, 16: 2.656 };
@@ -306,8 +334,10 @@ function breakdown(it) {
     }
   }
   const basis = { qty: r.ok ? qw : 0, sheet: +o.sheet || 0, hanger: +o.hangers || 0, el90, el45, elbow: el90 + el45, piece: +o.pieces || 0, drop: drops };
-  o.asm = (c.asm || []).map(a => { const q = (+a.f || 0) * (basis[a.base] || 0); return { name: a.name, unit: a.unit, price: +a.price || 0, q, cost: q * (+a.price || 0) }; }).filter(a => a.q > 0);
+  o.asm = (c.asm || []).map(a => { const q = (+a.f || 0) * (basis[a.base] || 0); return { name: a.name, unit: a.unit, price: +a.price || 0, q, cost: q * (+a.price || 0), hours: q * (+a.lab || 0) }; }).filter(a => a.q > 0);
   o.cost = o.mainCost + o.asm.reduce((s, a) => s + a.cost, 0);
+  o.mainHours = r.ok ? r.q * (+c.labor || 0) : 0;
+  o.hours = o.mainHours + o.asm.reduce((s, a) => s + a.hours, 0);
   return o;
 }
 // Count direction changes along a run: ~45° turns and ~90° turns (anything sharper counts as 90°)
@@ -395,7 +425,13 @@ function pushUndo() { S.undo.push(snapshot()); if (S.undo.length > 100) S.undo.s
 function restore(json) { const o = JSON.parse(json); S.items = o.items; S.pages = o.pages; S.conditions = o.conditions; S.selected = null; S.openCount = null; refresh(); }
 function undo() { if (!S.undo.length) return; S.redo.push(snapshot()); restore(S.undo.pop()); }
 function redo() { if (!S.redo.length) return; S.undo.push(snapshot()); restore(S.redo.pop()); }
-function projectData() { return { app: 'SmartTakeoff', version: 1, fileName: S.fileName, units: S.units, pages: S.pages, items: S.items, conditions: S.conditions }; }
+function projectData() { return { app: 'SmartTakeoff', version: 1, fileName: S.fileName, units: S.units, pages: S.pages, items: S.items, conditions: S.conditions, est: S.est }; }
+function defaultEst() {
+  let co = {}; try { co = JSON.parse(localStorage.getItem('smarttakeoff:company') || '{}'); } catch (e) { }
+  return { rate: 95, tax: 8.25, oh: 10, profit: 10, company: co.company || '', contact: co.contact || '', client: '', project: '', address: '', bidDate: '', estimator: co.estimator || '',
+    inclusions: 'Materials and labor for the mechanical and plumbing scope shown on the drawings listed.\nHangers and supports.\nTesting of piping systems.',
+    exclusions: 'Permits and fees.\nElectrical power and controls wiring.\nCutting, patching and painting.\nOvertime and premium time.\nEngineering and test & balance unless noted.', bySystem: true };
+}
 let saveT;
 function autosave() {
   clearTimeout(saveT);
@@ -403,7 +439,7 @@ function autosave() {
 }
 function loadProjectData(o) {
   if (!o || !Array.isArray(o.items)) throw new Error('Archivo de proyecto no válido');
-  S.units = o.units || 'imperial'; S.pages = o.pages || {}; S.items = o.items; S.conditions = o.conditions || [];
+  S.units = o.units || 'imperial'; S.pages = o.pages || {}; S.items = o.items; S.conditions = o.conditions || []; S.est = Object.assign(defaultEst(), o.est || {});
   S.activeCond = S.conditions[0] ? S.conditions[0].id : null;
   $('#unitsSel').value = S.units;
 }
@@ -814,9 +850,11 @@ function editCondition(id, forceType) {
     <label>Desperdicio (%)</label><input type="number" id="fWaste" value="${c.waste}" step="any">
     <label>Precio unitario</label><input type="number" id="fPrice" value="${c.price}" step="any">
     <div class="hint">Precio por ${c.type === 'count' ? 'pieza' : c.type === 'area' ? u.area : u.len}, se multiplica por la cantidad con desperdicio.</div>
+    <label>Mano de obra (h por unidad)</label><input type="number" id="fLabor" value="${+c.labor || 0}" step="any">
   </div>
   <h4 style="margin:16px 0 4px">Ensamble: materiales que salen de esta condición</h4>
   <div class="hint" style="color:var(--muted);font-size:12px;margin-bottom:6px">Cada material se calcula con un factor. Ejemplo: 2 colgadores por soporte, o 1 codo por cada codo 90°.</div>
+  <div class="asmRow asmHdr"><span>Material</span><span>Factor</span><span>Por</span><span>Unidad</span><span>Precio</span><span>h/u</span><span></span></div>
   <div id="asmRows"></div>
   <button id="asmAdd" type="button" style="margin-top:6px">+ Agregar material</button>`, [
     ...(isNew ? [] : [{ t: 'Eliminar', danger: true, f: () => {
@@ -831,7 +869,7 @@ function editCondition(id, forceType) {
       const name = $('#fName').value.trim();
       if (!name) { toast('Ponle un nombre a la condición'); return false; }
       pushUndo();
-      Object.assign(c, { name, type: $('#fType').value, color: $('#fColor').value, system: $('#fSystem').value.trim(), material: $('#fMat').value.trim(), size: $('#fSize').value.trim(), shape: $('#fShape').value, w: +$('#fW').value || 0, h: +$('#fH').value || 0, d: +$('#fD').value || 0, gauge: $('#fGauge').value, asm: readAsm(), piece: +$('#fPiece').value || 0, hanger: +$('#fHanger').value || 0, waste: +$('#fWaste').value || 0, price: +$('#fPrice').value || 0 });
+      Object.assign(c, { name, type: $('#fType').value, color: $('#fColor').value, system: $('#fSystem').value.trim(), material: $('#fMat').value.trim(), size: $('#fSize').value.trim(), shape: $('#fShape').value, w: +$('#fW').value || 0, h: +$('#fH').value || 0, d: +$('#fD').value || 0, gauge: $('#fGauge').value, asm: readAsm(), piece: +$('#fPiece').value || 0, hanger: +$('#fHanger').value || 0, waste: +$('#fWaste').value || 0, price: +$('#fPrice').value || 0, labor: +$('#fLabor').value || 0 });
       if (c.type !== 'linear') c.shape = 'none';
       if (isNew) S.conditions.push(c); else S.conditions[S.conditions.findIndex(x => x.id === id)] = c;
       S.activeCond = c.id;
@@ -850,19 +888,19 @@ function editCondition(id, forceType) {
   $('#fType').addEventListener('change', sync); $('#fShape').addEventListener('change', sync); sync();
   $('#modal').style.maxWidth = '760px';
   (c.asm || []).forEach(addAsmRow);
-  $('#asmAdd').addEventListener('click', () => addAsmRow({ name: '', f: 1, base: 'qty', unit: 'EA', price: 0 }));
+  $('#asmAdd').addEventListener('click', () => addAsmRow({ name: '', f: 1, base: 'qty', unit: 'EA', price: 0, lab: 0 }));
 }
 function addAsmRow(a) {
   const row = document.createElement('div');
   row.className = 'asmRow';
   row.innerHTML = `<input type="text" class="aName" placeholder="Material" value="${esc(a.name)}"><input type="number" class="aF" step="any" value="${+a.f || 0}" title="Factor">
     <select class="aBase" title="Por">${ASM_BASES.map(([v, l]) => `<option value="${v}" ${v === a.base ? 'selected' : ''}>${l}</option>`).join('')}</select>
-    <input type="text" class="aUnit" value="${esc(a.unit)}" title="Unidad"><input type="number" class="aPrice" step="any" value="${+a.price || 0}" title="Precio unit."><button type="button" class="aDel" title="Quitar">✕</button>`;
+    <input type="text" class="aUnit" value="${esc(a.unit)}" title="Unidad"><input type="number" class="aPrice" step="any" value="${+a.price || 0}" title="Precio unit."><input type="number" class="aLab" step="any" value="${+a.lab || 0}" title="Horas de mano de obra por unidad"><button type="button" class="aDel" title="Quitar">✕</button>`;
   row.querySelector('.aDel').addEventListener('click', () => row.remove());
   $('#asmRows').appendChild(row);
 }
 function readAsm() {
-  return [...document.querySelectorAll('#asmRows .asmRow')].map(r => ({ name: r.querySelector('.aName').value.trim(), f: +r.querySelector('.aF').value || 0, base: r.querySelector('.aBase').value, unit: r.querySelector('.aUnit').value.trim() || 'EA', price: +r.querySelector('.aPrice').value || 0 })).filter(a => a.name);
+  return [...document.querySelectorAll('#asmRows .asmRow')].map(r => ({ name: r.querySelector('.aName').value.trim(), f: +r.querySelector('.aF').value || 0, base: r.querySelector('.aBase').value, unit: r.querySelector('.aUnit').value.trim() || 'EA', price: +r.querySelector('.aPrice').value || 0, lab: +r.querySelector('.aLab').value || 0 })).filter(a => a.name);
 }
 let confirmDelete = false;
 
@@ -878,9 +916,9 @@ function summaryRows() {
   S.items.filter(isMeasure).forEach(it => {
     const c = condById(it.cond); if (!c) return;
     const b = breakdown(it);
-    const r = g[c.id] || (g[c.id] = { c, q: 0, qw: 0, pieces: 0, sheet: 0, weight: 0, hangers: 0, el90: 0, el45: 0, cost: 0, n: 0, nocal: 0 });
+    const r = g[c.id] || (g[c.id] = { c, q: 0, qw: 0, pieces: 0, sheet: 0, weight: 0, hangers: 0, el90: 0, el45: 0, cost: 0, hours: 0, n: 0, nocal: 0 });
     r.n++; if (!b.ok) { r.nocal++; return; }
-    r.q += b.q; r.qw += b.qw; r.pieces += +b.pieces || 0; r.sheet += +b.sheet || 0; r.weight += +b.weight || 0; r.hangers += +b.hangers || 0; r.el90 += b.el90; r.el45 += b.el45; r.cost += b.cost;
+    r.q += b.q; r.qw += b.qw; r.pieces += +b.pieces || 0; r.sheet += +b.sheet || 0; r.weight += +b.weight || 0; r.hangers += +b.hangers || 0; r.el90 += b.el90; r.el45 += b.el45; r.cost += b.cost; r.hours += b.hours;
   });
   // recompute pieces from the total (cutting from shared stock) instead of summing per run
   Object.values(g).forEach(r => { if (r.c.type === 'linear' && +r.c.piece > 0) r.pieces = Math.ceil(r.qw / r.c.piece - 1e-9); });
@@ -889,17 +927,32 @@ function summaryRows() {
 // Bill of materials: every condition's own material plus its assembly materials, merged by name + unit
 function bomRows() {
   const m = new Map();
-  const add = (name, unit, q, price, cost, from) => {
-    const k = name + '|' + unit; const r = m.get(k) || { name, unit, q: 0, price, cost: 0, from: new Set() };
-    r.q += q; r.cost += cost; if (price) r.price = price; r.from.add(from); m.set(k, r);
+  const add = (name, unit, q, price, cost, from, hrs) => {
+    const k = name + '|' + unit; const r = m.get(k) || { name, unit, q: 0, price, cost: 0, hrs: 0, from: new Set() };
+    r.q += q; r.cost += cost; r.hrs += hrs || 0; if (price) r.price = price; r.from.add(from); m.set(k, r);
   };
   S.items.filter(isMeasure).forEach(it => {
     const c = condById(it.cond); if (!c) return; const b = breakdown(it); if (!b.ok) return;
-    add(c.name, b.unit, b.qw, +c.price || 0, b.mainCost, c.name);
-    b.asm.forEach(a => add(a.name, a.unit, a.q, a.price, a.cost, c.name));
+    add(c.name, b.unit, b.qw, +c.price || 0, b.mainCost, c.name, b.mainHours);
+    b.asm.forEach(a => add(a.name, a.unit, a.q, a.price, a.cost, c.name, a.hours));
   });
   return [...m.values()].map(r => { const whole = /^(EA|pza)$/i.test(r.unit); const q = whole ? Math.ceil(r.q - 1e-9) : r.q; return { ...r, q, cost: r.price ? q * r.price : r.cost, whole, from: [...r.from].join(', ') }; });
 }
+function estimate() {
+  const e = S.est, sys = new Map();
+  let mat = 0, hrs = 0;
+  S.items.filter(isMeasure).forEach(it => {
+    const c = condById(it.cond); if (!c) return; const b = breakdown(it); if (!b.ok) return;
+    mat += b.cost; hrs += b.hours;
+    const k = c.system || '—'; const r = sys.get(k) || { name: k, mat: 0, hrs: 0 }; r.mat += b.cost; r.hrs += b.hours; sys.set(k, r);
+  });
+  const tax = mat * (+e.tax || 0) / 100, labor = hrs * (+e.rate || 0), direct = mat + tax + labor;
+  const oh = direct * (+e.oh || 0) / 100, profit = (direct + oh) * (+e.profit || 0) / 100, total = direct + oh + profit;
+  const k = direct ? total / direct : 0;
+  const systems = [...sys.values()].map(r => { const d = r.mat * (1 + (+e.tax || 0) / 100) + r.hrs * (+e.rate || 0); return { ...r, labor: r.hrs * (+e.rate || 0), direct: d, total: d * k }; });
+  return { mat, tax, hrs, labor, direct, oh, profit, total, systems };
+}
+const money = v => '$' + nf(v || 0);
 function unitOf(c) { return c.type === 'count' ? 'pza' : c.type === 'area' ? U().area : U().len; }
 function renderTable() {
   const w = $('#tableWrap');
@@ -907,7 +960,7 @@ function renderTable() {
     const rows = detailRows();
     if (!rows.length) { w.innerHTML = `<p style="padding:12px;color:var(--muted)">Aún no hay mediciones. Elige una condición a la izquierda y mide sobre el plano.</p>`; return; }
     const opts = (it) => S.conditions.filter(c => c.type === it.type).map(c => `<option value="${c.id}" ${c.id === it.cond ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
-    w.innerHTML = `<table><thead><tr><th>#</th><th>Pág.</th><th>Condición</th><th>Tipo</th><th class="n">Cantidad</th><th class="n">C/desperdicio</th><th class="n">Piezas</th><th class="n">Lámina (${U().area})</th><th class="n">Cal.</th><th class="n">Peso (${U().wt})</th><th class="n">Soportes</th><th class="n">Codos 90°</th><th class="n">Codos 45°</th><th class="n">Vertical (${U().len})</th><th class="n">Drops</th><th class="n">Costo</th><th></th></tr></thead><tbody>${rows.map(({ it, c, b, i }) => `
+    w.innerHTML = `<table><thead><tr><th>#</th><th>Pág.</th><th>Condición</th><th>Tipo</th><th class="n">Cantidad</th><th class="n">C/desperdicio</th><th class="n">Piezas</th><th class="n">Lámina (${U().area})</th><th class="n">Cal.</th><th class="n">Peso (${U().wt})</th><th class="n">Soportes</th><th class="n">Codos 90°</th><th class="n">Codos 45°</th><th class="n">Vertical (${U().len})</th><th class="n">Drops</th><th class="n">Costo</th><th class="n">Horas</th><th></th></tr></thead><tbody>${rows.map(({ it, c, b, i }) => `
       <tr data-id="${it.id}" class="${S.selected === it.id ? 'sel' : ''}"><td>${i}</td><td>${it.page}</td>
       <td><span class="sw" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${esc(c.color)};margin-right:5px"></span><select data-cond="${it.id}">${opts(it)}</select></td>
       <td>${typeName[it.type]}</td>
@@ -916,26 +969,138 @@ function renderTable() {
       <td class="n">${it.type === 'linear' ? b.el90 : ''}</td><td class="n">${it.type === 'linear' ? b.el45 : ''}</td>
       <td class="n">${it.type === 'linear' ? `<input type="number" min="0" step="any" data-vert="${it.id}" value="${+it.vert || 0}" style="width:64px;text-align:right">` : ''}</td>
       <td class="n">${it.type === 'linear' ? `<input type="number" min="0" step="1" data-drops="${it.id}" value="${+it.drops || 0}" style="width:52px;text-align:right">` : ''}</td>
-      <td class="n">${b.cost ? '$' + nf(b.cost) : ''}</td><td><button data-del="${it.id}" title="Eliminar">✕</button></td></tr>`).join('')}</tbody></table>`;
+      <td class="n">${b.cost ? '$' + nf(b.cost) : ''}</td><td class="n">${b.hours ? nf(b.hours, 1) : ''}</td><td><button data-del="${it.id}" title="Eliminar">✕</button></td></tr>`).join('')}</tbody></table>`;
   } else if (S.tab === 'bom') {
     const rows = bomRows();
     if (!rows.length) { w.innerHTML = `<p style="padding:12px;color:var(--muted)">La lista de materiales aparece cuando tengas mediciones con escala.</p>`; return; }
     const total = rows.reduce((s, r) => s + r.cost, 0);
-    w.innerHTML = `<table><thead><tr><th>Material</th><th class="n">Cantidad</th><th>Unidad</th><th class="n">Precio unit.</th><th class="n">Costo</th><th>Origen</th></tr></thead><tbody>${rows.map(r => `
-      <tr><td>${esc(r.name)}</td><td class="n">${nf(r.q, r.whole ? 0 : 2)}</td><td>${esc(r.unit)}</td><td class="n">${r.price ? '$' + nf(r.price) : ''}</td><td class="n">${r.cost ? '$' + nf(r.cost) : ''}</td><td style="color:var(--muted)">${esc(r.from)}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><td colspan="4">Total</td><td class="n">${total ? '$' + nf(total) : ''}</td><td></td></tr></tfoot></table>`;
+    w.innerHTML = `<table><thead><tr><th>Material</th><th class="n">Cantidad</th><th>Unidad</th><th class="n">Precio unit.</th><th class="n">Costo</th><th class="n">Horas</th><th>Origen</th></tr></thead><tbody>${rows.map(r => `
+      <tr><td>${esc(r.name)}</td><td class="n">${nf(r.q, r.whole ? 0 : 2)}</td><td>${esc(r.unit)}</td><td class="n">${r.price ? '$' + nf(r.price) : ''}</td><td class="n">${r.cost ? '$' + nf(r.cost) : ''}</td><td class="n">${r.hrs ? nf(r.hrs, 1) : ''}</td><td style="color:var(--muted)">${esc(r.from)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="4">Total</td><td class="n">${total ? '$' + nf(total) : ''}</td><td class="n">${nf(rows.reduce((s, r) => s + r.hrs, 0), 1)}</td><td></td></tr></tfoot></table>`;
+  } else if (S.tab === 'estimate') {
+    renderEstimate(w);
   } else {
     const rows = summaryRows();
     if (!rows.length) { w.innerHTML = `<p style="padding:12px;color:var(--muted)">El resumen aparece cuando tengas mediciones.</p>`; return; }
     const total = rows.reduce((s, r) => s + r.cost, 0);
-    w.innerHTML = `<table><thead><tr><th>Condición</th><th>Sistema</th><th>Material</th><th>Tamaño</th><th class="n">Mediciones</th><th class="n">Cantidad</th><th>Unidad</th><th class="n">Desp. %</th><th class="n">C/desperdicio</th><th class="n">Piezas</th><th class="n">Lámina (${U().area})</th><th class="n">Cal.</th><th class="n">Peso (${U().wt})</th><th class="n">Soportes</th><th class="n">Codos 90°</th><th class="n">Codos 45°</th><th class="n">Costo</th></tr></thead><tbody>${rows.map(r => `
+    w.innerHTML = `<table><thead><tr><th>Condición</th><th>Sistema</th><th>Material</th><th>Tamaño</th><th class="n">Mediciones</th><th class="n">Cantidad</th><th>Unidad</th><th class="n">Desp. %</th><th class="n">C/desperdicio</th><th class="n">Piezas</th><th class="n">Lámina (${U().area})</th><th class="n">Cal.</th><th class="n">Peso (${U().wt})</th><th class="n">Soportes</th><th class="n">Codos 90°</th><th class="n">Codos 45°</th><th class="n">Costo</th><th class="n">Horas</th></tr></thead><tbody>${rows.map(r => `
       <tr><td><span class="sw" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${esc(r.c.color)};margin-right:5px"></span>${esc(r.c.name)}${r.nocal ? ` <span class="nocal" title="Mediciones en páginas sin escala">(${r.nocal} sin escala)</span>` : ''}</td>
       <td>${esc(r.c.system)}</td><td>${esc(r.c.material)}</td><td>${esc(sizeLabel(r.c))}</td><td class="n">${r.n}</td>
       <td class="n">${r.c.type === 'count' ? r.q : nf(r.q)}</td><td>${unitOf(r.c)}</td><td class="n">${r.c.waste || 0}</td><td class="n">${r.c.type === 'count' ? nf(r.qw, 0) : nf(r.qw)}</td>
       <td class="n">${r.c.type === 'linear' && r.c.piece ? r.pieces + ` <small style="color:var(--muted)">× ${r.c.piece} ${U().len}</small>` : ''}</td>
-      <td class="n">${r.sheet ? nf(r.sheet) : ''}</td><td class="n">${gaugeOf(r.c)}</td><td class="n">${r.weight ? nf(r.weight, 0) : ''}</td><td class="n">${r.hangers || ''}</td><td class="n">${r.c.type === 'linear' ? r.el90 : ''}</td><td class="n">${r.c.type === 'linear' ? r.el45 : ''}</td><td class="n">${r.cost ? '$' + nf(r.cost) : ''}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><td colspan="16">Total</td><td class="n">${total ? '$' + nf(total) : ''}</td></tr></tfoot></table>`;
+      <td class="n">${r.sheet ? nf(r.sheet) : ''}</td><td class="n">${gaugeOf(r.c)}</td><td class="n">${r.weight ? nf(r.weight, 0) : ''}</td><td class="n">${r.hangers || ''}</td><td class="n">${r.c.type === 'linear' ? r.el90 : ''}</td><td class="n">${r.c.type === 'linear' ? r.el45 : ''}</td><td class="n">${r.cost ? '$' + nf(r.cost) : ''}</td><td class="n">${r.hours ? nf(r.hours, 1) : ''}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="16">Total</td><td class="n">${total ? '$' + nf(total) : ''}</td><td class="n">${nf(rows.reduce((s, r) => s + r.hours, 0), 1)}</td></tr></tfoot></table>`;
   }
+}
+function renderEstimate(w) {
+  const e = S.est, t = estimate();
+  const inp = (k, label, step) => `<label>${label}</label><input type="number" step="${step || 'any'}" data-est="${k}" value="${+e[k] || 0}">`;
+  w.innerHTML = `<div class="est">
+    <div class="estCol">
+      <div class="form estForm">${inp('rate', 'Tarifa mano de obra ($/h)')}${inp('tax', 'Impuesto materiales (%)')}${inp('oh', 'Overhead (%)')}${inp('profit', 'Utilidad (%)')}</div>
+      <div class="estBtns"><button id="btnPropInfo">Datos de la propuesta…</button><button id="btnProposal" class="primary">Generar propuesta</button></div>
+      <div class="estBtns"><button id="btnPriceOut" title="Descarga un Excel con todos los materiales para llenar precios y horas">Exportar lista de precios</button><button id="btnPriceIn" title="Carga precios y horas desde Excel">Importar lista de precios</button></div>
+    </div>
+    <table class="estTot"><tbody>
+      <tr><td>Costo de materiales</td><td class="n">${money(t.mat)}</td></tr>
+      <tr><td>Impuesto (${nf(e.tax, 2)}%)</td><td class="n">${money(t.tax)}</td></tr>
+      <tr><td>Mano de obra (${nf(t.hrs, 1)} h × ${money(e.rate)})</td><td class="n">${money(t.labor)}</td></tr>
+      <tr class="sub"><td>Costo directo</td><td class="n">${money(t.direct)}</td></tr>
+      <tr><td>Overhead (${nf(e.oh, 2)}%)</td><td class="n">${money(t.oh)}</td></tr>
+      <tr><td>Utilidad (${nf(e.profit, 2)}%)</td><td class="n">${money(t.profit)}</td></tr>
+      <tr class="grand"><td>Total de la oferta</td><td class="n">${money(t.total)}</td></tr>
+    </tbody></table>
+    <table class="estSys"><thead><tr><th>Sistema</th><th class="n">Materiales</th><th class="n">Horas</th><th class="n">Mano de obra</th><th class="n">Total</th></tr></thead><tbody>
+      ${t.systems.map(r => `<tr><td>${esc(r.name)}</td><td class="n">${money(r.mat)}</td><td class="n">${nf(r.hrs, 1)}</td><td class="n">${money(r.labor)}</td><td class="n">${money(r.total)}</td></tr>`).join('') || '<tr><td colspan="5" style="color:var(--muted)">Sin mediciones con escala.</td></tr>'}
+    </tbody></table>
+  </div>`;
+  $('#btnPropInfo').addEventListener('click', proposalInfo);
+  $('#btnProposal').addEventListener('click', openProposal);
+  $('#btnPriceOut').addEventListener('click', exportPriceList);
+  $('#btnPriceIn').addEventListener('click', () => $('#filePrice').click());
+}
+$('#tableWrap').addEventListener('change', e => {
+  const f = e.target.closest('[data-est]'); if (!f) return;
+  S.est[f.dataset.est] = +f.value || 0; autosave(); renderTable();
+});
+function proposalInfo() {
+  const e = S.est;
+  const fld = (k, l, ph) => `<label>${l}</label><input type="text" id="p_${k}" value="${esc(e[k])}" placeholder="${ph || ''}">`;
+  modal(`<h3>Datos de la propuesta</h3><div class="form">
+    ${fld('company', 'Empresa', 'ABC Mechanical LLC')}${fld('contact', 'Contacto / licencia', 'Phone · email · License #')}${fld('estimator', 'Estimador')}
+    ${fld('client', 'Cliente', 'General contractor')}${fld('project', 'Proyecto')}${fld('address', 'Dirección de la obra')}${fld('bidDate', 'Fecha de la oferta', 'MM/DD/YYYY')}
+    <label>Incluye</label><textarea id="p_inclusions" rows="4">${esc(e.inclusions)}</textarea>
+    <label>Excluye</label><textarea id="p_exclusions" rows="5">${esc(e.exclusions)}</textarea>
+    <label>Desglose</label><select id="p_bySystem"><option value="1">Mostrar montos por sistema</option><option value="0">Solo monto total</option></select>
+  </div>`, [{ t: 'Cancelar' }, { t: 'Guardar', primary: true, f: () => {
+    ['company', 'contact', 'estimator', 'client', 'project', 'address', 'bidDate', 'inclusions', 'exclusions'].forEach(k => e[k] = $('#p_' + k).value);
+    e.bySystem = $('#p_bySystem').value === '1';
+    try { localStorage.setItem('smarttakeoff:company', JSON.stringify({ company: e.company, contact: e.contact, estimator: e.estimator })); } catch (err) { }
+    autosave();
+  } }]);
+  $('#p_bySystem').value = e.bySystem ? '1' : '0';
+}
+function openProposal() {
+  const e = S.est, t = estimate(), en = expEN();
+  const L = en ? { title: 'PROPOSAL', to: 'To', project: 'Project', address: 'Location', date: 'Date', est: 'Estimator', scope: 'Scope of Work', sys: 'System', amt: 'Amount', total: 'Total Base Bid', inc: 'Inclusions', exc: 'Exclusions', drawings: 'Based on drawing', valid: 'This proposal is valid for 30 days from the date above.', acc: 'Accepted by', sig: 'Signature', print: 'Print / Save as PDF', items: 'Includes' }
+    : { title: 'PROPUESTA', to: 'Para', project: 'Proyecto', address: 'Ubicación', date: 'Fecha', est: 'Estimador', scope: 'Alcance del trabajo', sys: 'Sistema', amt: 'Monto', total: 'Total de la oferta', inc: 'Incluye', exc: 'Excluye', drawings: 'Basado en el plano', valid: 'Esta propuesta es válida por 30 días a partir de la fecha indicada.', acc: 'Aceptado por', sig: 'Firma', print: 'Imprimir / Guardar como PDF', items: 'Incluye' };
+  const date = e.bidDate || new Date().toLocaleDateString('en-US');
+  const scopeItems = name => [...new Set(S.items.filter(isMeasure).map(it => condById(it.cond)).filter(c => c && (c.system || '—') === name).map(c => c.name))].join(', ');
+  const lines = s => esc(s).split('\n').filter(x => x.trim()).map(x => `<li>${x}</li>`).join('');
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(L.title)} · ${esc(e.project || baseName())}</title><style>
+    body{font:13px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#1d2330;max-width:780px;margin:32px auto;padding:0 24px}
+    header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #d9480f;padding-bottom:12px;margin-bottom:18px}
+    h1{margin:0;font-size:22px;letter-spacing:2px;color:#d9480f} .co{font-size:17px;font-weight:700} .muted{color:#677084}
+    table{width:100%;border-collapse:collapse;margin:8px 0 16px} td,th{padding:6px 8px;border-bottom:1px solid #dde1e8;text-align:left;vertical-align:top} th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#677084}
+    .n{text-align:right;white-space:nowrap} .tot td{font-weight:700;font-size:15px;border-top:2px solid #1d2330;border-bottom:0}
+    .meta td{border:0;padding:2px 8px 2px 0} h2{font-size:14px;text-transform:uppercase;letter-spacing:.6px;margin:20px 0 4px}
+    .sig{display:flex;gap:40px;margin-top:40px} .sig div{flex:1;border-top:1px solid #1d2330;padding-top:4px;color:#677084}
+    .bar{position:sticky;top:0;background:#fff;padding:8px 0;text-align:right} @media print{.bar{display:none} body{margin:0}}
+  </style></head><body>
+  <div class="bar"><button onclick="window.print()">${L.print}</button></div>
+  <header><div><div class="co">${esc(e.company || 'Your Company')}</div><div class="muted">${esc(e.contact)}</div></div><h1>${L.title}</h1></header>
+  <table class="meta"><tr><td class="muted">${L.to}</td><td>${esc(e.client)}</td><td class="muted">${L.date}</td><td>${esc(date)}</td></tr>
+  <tr><td class="muted">${L.project}</td><td>${esc(e.project || baseName())}</td><td class="muted">${L.est}</td><td>${esc(e.estimator)}</td></tr>
+  <tr><td class="muted">${L.address}</td><td colspan="3">${esc(e.address)}</td></tr></table>
+  <h2>${L.scope}</h2><p class="muted">${L.drawings}: ${esc(S.fileName || '')}</p>
+  <table><thead><tr><th>${L.sys}</th><th>${L.items}</th>${e.bySystem ? `<th class="n">${L.amt}</th>` : ''}</tr></thead><tbody>
+  ${t.systems.map(r => `<tr><td>${esc(r.name)}</td><td>${esc(scopeItems(r.name))}</td>${e.bySystem ? `<td class="n">${money(r.total)}</td>` : ''}</tr>`).join('')}
+  <tr class="tot"><td colspan="${e.bySystem ? 2 : 1}">${L.total}</td><td class="n">${money(t.total)}</td></tr></tbody></table>
+  <h2>${L.inc}</h2><ul>${lines(e.inclusions)}</ul><h2>${L.exc}</h2><ul>${lines(e.exclusions)}</ul>
+  <p class="muted">${L.valid}</p>
+  <div class="sig"><div>${L.acc}</div><div>${L.sig}</div><div>${L.date}</div></div>
+  </body></html>`;
+  const win = window.open('', '_blank');
+  if (!win) { toast('El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio.'); return; }
+  win.document.open(); win.document.write(html); win.document.close();
+}
+function exportPriceList() {
+  const m = new Map();
+  S.conditions.forEach(c => {
+    if (!m.has(c.name)) m.set(c.name, { 'Material': c.name, 'Unidad': unitOf(c), 'Precio unit.': c.price || null, 'Horas MO (h/u)': c.labor || null });
+    (c.asm || []).forEach(a => { if (!m.has(a.name)) m.set(a.name, { 'Material': a.name, 'Unidad': a.unit, 'Precio unit.': a.price || null, 'Horas MO (h/u)': a.lab || null }); });
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheetFrom(trRows([...m.values()])), T('Precios'));
+  XLSX.writeFile(wb, 'SmartTakeoff_' + (expEN() ? 'price_list' : 'lista_precios') + '.xlsx');
+  toast('Lista de precios exportada. Llena precios y horas y vuelve a importarla.');
+}
+async function importPriceList(f) {
+  try {
+    const wb = XLSX.read(await f.arrayBuffer());
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+    const pick = (r, re) => { const k = Object.keys(r).find(k => re.test(k)); return k ? r[k] : ''; };
+    const list = new Map();
+    rows.forEach(r => { const n = String(pick(r, /^(material|item|descrip|nombre|name)/i)).trim().toLowerCase(); if (n) list.set(n, { price: pick(r, /precio|price|cost/i), lab: pick(r, /hora|hour|labor|mo\b/i) }); });
+    let n = 0; pushUndo();
+    const val = v => v === '' || v == null ? null : +v;
+    S.conditions.forEach(c => {
+      const m = list.get(c.name.toLowerCase());
+      if (m) { if (val(m.price) != null) c.price = val(m.price); if (val(m.lab) != null) c.labor = val(m.lab); n++; }
+      (c.asm || []).forEach(a => { const m2 = list.get(a.name.toLowerCase()); if (m2) { if (val(m2.price) != null) a.price = val(m2.price); if (val(m2.lab) != null) a.lab = val(m2.lab); n++; } });
+    });
+    refresh(); toast(n ? `${n} material(es) actualizados` : 'No encontré materiales con el mismo nombre');
+  } catch (err) { console.error(err); toast('No se pudo leer el archivo: ' + err.message); }
 }
 $('#tableWrap').addEventListener('click', e => {
   const del = e.target.closest('[data-del]');
@@ -997,7 +1162,7 @@ function detailSheetRows() {
     'Piezas': b.pieces === '' ? null : b.pieces, ['Largo pieza (' + u.len + ')']: it.type === 'linear' && c.piece ? c.piece : null,
     ['Lámina (' + u.area + ')']: b.sheet === '' ? null : +b.sheet.toFixed(2), 'Calibre': b.gauge || null, ['Peso (' + u.wt + ')']: b.weight === '' ? null : Math.round(b.weight), 'Soportes': b.hangers === '' ? null : b.hangers,
     'Codos 90°': it.type === 'linear' ? b.el90 : null, 'Codos 45°': it.type === 'linear' ? b.el45 : null, ['Vertical (' + u.len + ')']: it.type === 'linear' ? b.vert : null, 'Drops': it.type === 'linear' ? b.drops : null,
-    'Precio unit.': c.price || null, 'Costo': b.cost ? +b.cost.toFixed(2) : null, 'Escala': (S.pages[it.page] || {}).calLabel || 'sin calibrar'
+    'Precio unit.': c.price || null, 'Costo': b.cost ? +b.cost.toFixed(2) : null, 'Horas MO': b.hours ? +b.hours.toFixed(2) : null, 'Escala': (S.pages[it.page] || {}).calLabel || 'sin calibrar'
   }));
 }
 function summarySheetRows() {
@@ -1006,7 +1171,7 @@ function summarySheetRows() {
     'Condición': r.c.name, 'Sistema': r.c.system, 'Material': r.c.material, 'Tamaño': sizeLabel(r.c), 'Tipo': typeName[r.c.type], 'Mediciones': r.n,
     'Cantidad': +r.q.toFixed(3), 'Unidad': unitOf(r.c), 'Desperdicio %': r.c.waste || 0, 'Cant. c/desperdicio': +r.qw.toFixed(3),
     'Piezas': r.c.type === 'linear' && r.c.piece ? r.pieces : null, ['Largo pieza (' + u.len + ')']: r.c.type === 'linear' && r.c.piece ? r.c.piece : null,
-    ['Lámina (' + u.area + ')']: r.sheet ? +r.sheet.toFixed(2) : null, 'Calibre': gaugeOf(r.c) || null, ['Peso (' + u.wt + ')']: r.weight ? Math.round(r.weight) : null, 'Soportes': r.hangers || null, 'Codos 90°': r.c.type === 'linear' ? r.el90 : null, 'Codos 45°': r.c.type === 'linear' ? r.el45 : null, 'Precio unit.': r.c.price || null, 'Costo': r.cost ? +r.cost.toFixed(2) : null,
+    ['Lámina (' + u.area + ')']: r.sheet ? +r.sheet.toFixed(2) : null, 'Calibre': gaugeOf(r.c) || null, ['Peso (' + u.wt + ')']: r.weight ? Math.round(r.weight) : null, 'Soportes': r.hangers || null, 'Codos 90°': r.c.type === 'linear' ? r.el90 : null, 'Codos 45°': r.c.type === 'linear' ? r.el45 : null, 'Precio unit.': r.c.price || null, 'Costo': r.cost ? +r.cost.toFixed(2) : null, 'Horas MO': r.hours ? +r.hours.toFixed(2) : null,
     'Sin escala': r.nocal || null
   }));
 }
@@ -1015,7 +1180,7 @@ function conditionSheetRows() {
   return S.conditions.map(c => ({
     'Nombre': c.name, 'Tipo': typeName[c.type], 'Color': c.color, 'Sistema': c.system, 'Material': c.material, 'Tamaño': c.size,
     'Forma': c.shape === 'rect' ? 'Rectangular' : c.shape === 'round' ? 'Redondo' : '', ['Ancho (' + u.size + ')']: c.w || null, ['Alto (' + u.size + ')']: c.h || null, ['Diámetro (' + u.size + ')']: c.d || null, 'Calibre': c.shape === 'none' ? null : (c.gauge === 'auto' || !c.gauge ? 'auto' : +c.gauge),
-    ['Largo pieza (' + u.len + ')']: c.piece || null, ['Soporte cada (' + u.len + ')']: c.hanger || null, 'Desperdicio %': c.waste || 0, 'Precio unit.': c.price || null
+    ['Largo pieza (' + u.len + ')']: c.piece || null, ['Soporte cada (' + u.len + ')']: c.hanger || null, 'Desperdicio %': c.waste || 0, 'Precio unit.': c.price || null, 'Horas MO (h/u)': c.labor || null
   }));
 }
 const EN = { '#': '#', 'Página': 'Sheet', 'Condición': 'Item', 'Sistema': 'System', 'Material': 'Material', 'Tamaño': 'Size', 'Tipo': 'Type', 'Cantidad': 'Quantity', 'Unidad': 'Unit',
@@ -1024,7 +1189,8 @@ const EN = { '#': '#', 'Página': 'Sheet', 'Condición': 'Item', 'Sistema': 'Sys
   'Diámetro': 'Diameter', 'Soporte cada': 'Hanger Spacing', 'Total': 'Total', 'Proyecto': 'Project', 'Plano': 'Drawing', 'Unidades': 'Units', 'Fecha': 'Date', 'Generado con': 'Generated with',
   'Resumen': 'Summary', 'Detalle': 'Detail', 'Condiciones': 'Conditions', 'Lineal': 'Linear', 'Área': 'Area', 'Conteo': 'Count', 'Rectangular': 'Rectangular', 'Redondo': 'Round', 'Imperial': 'Imperial', 'Métrico': 'Metric',
   'sin calibrar': 'not calibrated', 'Codos 90°': '90° Elbows', 'Codos 45°': '45° Elbows', 'Vertical': 'Vertical', 'Drops': 'Drops', 'Materiales': 'Bill of Materials', 'Ensambles': 'Assemblies',
-  'Factor': 'Factor', 'Por': 'Per', 'Origen': 'Used In' };
+  'Factor': 'Factor', 'Por': 'Per', 'Origen': 'Used In', 'Horas MO': 'Labor Hrs', 'Estimado': 'Estimate', 'Impuesto %': 'Material Tax %', 'Impuesto': 'Material Tax', 'Tarifa $/h': 'Labor Rate $/hr',
+  'Mano de obra': 'Labor', 'Costo directo': 'Direct Cost', 'Overhead %': 'Overhead %', 'Overhead': 'Overhead', 'Utilidad %': 'Profit %', 'Utilidad': 'Profit', 'Total de la oferta': 'Total Bid', 'Precios': 'Price List', 'Costo de materiales': 'Material Cost' };
 const EN_UNIT = { 'ft': 'LF', 'ft²': 'SF', 'pza': 'EA', 'm': 'm', 'm²': 'm²' };
 const expEN = () => $('#expLang').value === 'en';
 const T = s => expEN() ? (EN[s] || s) : s;
@@ -1036,9 +1202,9 @@ function trVal(v) {
   return EN[v] || v;
 }
 const trRows = rows => expEN() ? rows.map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [trKey(k), trVal(v)]))) : rows;
-function bomSheetRows() { return bomRows().map(r => ({ 'Material': r.name, 'Cantidad': r.whole ? r.q : +r.q.toFixed(2), 'Unidad': r.unit, 'Precio unit.': r.price || null, 'Costo': r.cost ? +r.cost.toFixed(2) : null, 'Origen': r.from })); }
+function bomSheetRows() { return bomRows().map(r => ({ 'Material': r.name, 'Cantidad': r.whole ? r.q : +r.q.toFixed(2), 'Unidad': r.unit, 'Precio unit.': r.price || null, 'Costo': r.cost ? +r.cost.toFixed(2) : null, 'Horas MO': r.hrs ? +r.hrs.toFixed(2) : null, 'Origen': r.from })); }
 function asmSheetRows() {
-  const out = []; S.conditions.forEach(c => (c.asm || []).forEach(a => out.push({ 'Condición': c.name, 'Material': a.name, 'Factor': a.f, 'Por': a.base, 'Unidad': a.unit, 'Precio unit.': a.price || null })));
+  const out = []; S.conditions.forEach(c => (c.asm || []).forEach(a => out.push({ 'Condición': c.name, 'Material': a.name, 'Factor': a.f, 'Por': a.base, 'Unidad': a.unit, 'Precio unit.': a.price || null, 'Horas MO (h/u)': a.lab || null })));
   return out;
 }
 function baseName() { return (S.fileName || 'takeoff').replace(/\.pdf$/i, ''); }
@@ -1068,6 +1234,13 @@ $('#btnXlsx').addEventListener('click', () => {
   }
   XLSX.utils.book_append_sheet(wb, sheetFrom(trRows(detailSheetRows())), T('Detalle'));
   XLSX.utils.book_append_sheet(wb, sheetFrom(trRows(conditionSheetRows())), T('Condiciones'));
+  const t = estimate(), e = S.est;
+  const estA = [[T('Costo de materiales'), +t.mat.toFixed(2)], [T('Impuesto %'), (+e.tax || 0) / 100], [T('Impuesto'), { f: 'B1*B2' }], [T('Horas MO'), +t.hrs.toFixed(2)], [T('Tarifa $/h'), +e.rate || 0], [T('Mano de obra'), { f: 'B4*B5' }],
+    [T('Costo directo'), { f: 'B1+B3+B6' }], [T('Overhead %'), (+e.oh || 0) / 100], [T('Overhead'), { f: 'B7*B8' }], [T('Utilidad %'), (+e.profit || 0) / 100], [T('Utilidad'), { f: '(B7+B9)*B10' }], [T('Total de la oferta'), { f: 'B7+B9+B11' }]];
+  const wsE = XLSX.utils.aoa_to_sheet(estA.map(r => [r[0], typeof r[1] === 'object' ? null : r[1]]));
+  estA.forEach((r, i) => { const ref = 'B' + (i + 1); if (typeof r[1] === 'object') wsE[ref] = { t: 'n', f: r[1].f }; wsE[ref].z = /%$/.test(r[0]) ? '0.00%' : /Hor|Hrs/.test(r[0]) ? '0.0' : '$#,##0.00'; });
+  wsE['!cols'] = [{ wch: 26 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(wb, wsE, T('Estimado'));
   const asm = trRows(asmSheetRows()); if (asm.length) XLSX.utils.book_append_sheet(wb, sheetFrom(asm), T('Ensambles'));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[T('Proyecto'), baseName()], [T('Plano'), S.fileName], [T('Unidades'), T(S.units === 'imperial' ? 'Imperial' : 'Métrico')], [T('Fecha'), new Date().toLocaleString('en-US')], [T('Generado con'), 'SmartTakeoff']]), 'Info');
   XLSX.writeFile(wb, baseName() + '_takeoff.xlsx');
@@ -1089,6 +1262,7 @@ function download(blob, name) { const a = document.createElement('a'); a.href = 
 
 /* ---------- Import conditions from Excel ---------- */
 $('#btnImportCond').addEventListener('click', () => $('#fileCond').click());
+$('#filePrice').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) importPriceList(f); });
 $('#fileCond').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   try {
@@ -1105,7 +1279,7 @@ $('#fileCond').addEventListener('change', async e => {
         system: String(pick(r, /^sistema|system/i)), material: String(pick(r, /^material/i)), size: String(pick(r, /^tama|size/i)),
         shape: /rect/i.test(forma) ? 'rect' : /redond|round/i.test(forma) ? 'round' : 'none',
         gauge: String(pick(r, /^calibre|gauge/i) || 'auto'), w: +pick(r, /^ancho|width/i) || 0, h: +pick(r, /^alto|height/i) || 0, d: +pick(r, /^di[aá]m/i) || 0,
-        piece: +pick(r, /^largo pieza|piece/i) || 0, hanger: +pick(r, /^soporte|hanger/i) || 0, waste: +pick(r, /^desperd|waste/i) || 0, price: +pick(r, /^precio|price|costo unit/i) || 0 };
+        piece: +pick(r, /^largo pieza|piece/i) || 0, hanger: +pick(r, /^soporte|hanger/i) || 0, waste: +pick(r, /^desperd|waste/i) || 0, price: +pick(r, /^precio|price|costo unit/i) || 0, labor: +pick(r, /^(horas|labor)/i) || 0 };
       if (!/^(auto|16|18|20|22|24|26)$/.test(c.gauge)) c.gauge = 'auto';
       const ex = S.conditions.find(x => x.name.toLowerCase() === name.toLowerCase());
       if (ex) Object.assign(ex, c, { id: ex.id, type: ex.type, asm: ex.asm || [] }); else S.conditions.push(c);
@@ -1119,7 +1293,7 @@ $('#fileCond').addEventListener('change', async e => {
         const c = S.conditions.find(x => x.name.toLowerCase() === cn.toLowerCase()); if (!c) return;
         if (!touched.has(c.id)) { c.asm = []; touched.add(c.id); }
         const base = String(pick(r, /^(por|per)$/i)).trim();
-        c.asm.push({ name: mn, f: +pick(r, /^factor/i) || 0, base: ASM_BASES.some(b => b[0] === base) ? base : 'qty', unit: String(pick(r, /^(unidad|unit)$/i) || 'EA'), price: +pick(r, /^precio|price/i) || 0 });
+        c.asm.push({ lab: +pick(r, /^(horas|labor)/i) || 0, name: mn, f: +pick(r, /^factor/i) || 0, base: ASM_BASES.some(b => b[0] === base) ? base : 'qty', unit: String(pick(r, /^(unidad|unit)$/i) || 'EA'), price: +pick(r, /^precio|price/i) || 0 });
       });
     }
     refresh(); toast(n ? `${n} condición(es) importadas o actualizadas` : 'No encontré filas con columna “Nombre”');
@@ -1155,6 +1329,10 @@ viewer.addEventListener('drop', e => {
   if (f) openPdf(f); else toast('Suelta un archivo PDF');
 });
 
+let splitDrag = null;
+$('#split').addEventListener('mousedown', e => { splitDrag = { y: e.clientY, h: $('#bottom').offsetHeight }; e.preventDefault(); });
+window.addEventListener('mousemove', e => { if (!splitDrag) return; const h = Math.max(120, Math.min(window.innerHeight - 200, splitDrag.h - (e.clientY - splitDrag.y))); document.querySelector('main').style.setProperty('--bottomH', h + 'px'); });
+window.addEventListener('mouseup', () => { splitDrag = null; });
 $('#zoomIn').addEventListener('click', () => setZoom(S.zoom * 1.25));
 $('#zoomOut').addEventListener('click', () => setZoom(S.zoom / 1.25));
 $('#zoomFit').addEventListener('click', () => S.pdf && fitZoom());
@@ -1229,7 +1407,18 @@ const UI_EN = {
   '+ Agregar material': '+ Add material', 'Factor': 'Factor', 'Por': 'Per', 'Quitar': 'Remove',
   'por unidad medida (LF/SF/EA)': 'per measured unit (LF/SF/EA)', 'por unidad de lámina (ft²)': 'per sheet metal SF', 'por soporte': 'per hanger', 'por codo 90°': 'per 90° elbow',
   'por codo 45°': 'per 45° elbow', 'por codo (cualquiera)': 'per elbow (any)', 'por tramo/pieza': 'per stock piece', 'por drop/riser': 'per drop/riser',
-  'La lista de materiales aparece cuando tengas mediciones con escala.': 'The bill of materials appears once you have scaled takeoffs.'
+  'La lista de materiales aparece cuando tengas mediciones con escala.': 'The bill of materials appears once you have scaled takeoffs.',
+  'Estimado': 'Estimate', 'Horas': 'Hours', 'Precio': 'Price', 'h/u': 'hr/unit', 'Mano de obra (h por unidad)': 'Labor (hr per unit)', 'Horas de mano de obra por unidad': 'Labor hours per unit',
+  'Tarifa mano de obra ($/h)': 'Labor rate ($/hr)', 'Impuesto materiales (%)': 'Material tax (%)', 'Overhead (%)': 'Overhead (%)', 'Utilidad (%)': 'Profit (%)',
+  'Datos de la propuesta…': 'Proposal details…', 'Generar propuesta': 'Create proposal', 'Exportar lista de precios': 'Export price list', 'Importar lista de precios': 'Import price list',
+  'Descarga un Excel con todos los materiales para llenar precios y horas': 'Download an Excel file with every material to fill in prices and hours', 'Carga precios y horas desde Excel': 'Load prices and hours from Excel',
+  'Materiales': 'Bill of Materials', 'Mano de obra': 'Labor', 'Costo directo': 'Direct cost', 'Overhead': 'Overhead', 'Utilidad': 'Profit', 'Impuesto': 'Tax', 'Total de la oferta': 'Total bid',
+  'Sin mediciones con escala.': 'No scaled takeoffs.', 'Costo de materiales': 'Material cost', 'Datos de la propuesta': 'Proposal details', 'Empresa': 'Company', 'Contacto / licencia': 'Contact / license', 'Estimador': 'Estimator', 'Cliente': 'Client',
+  'Proyecto': 'Project', 'Dirección de la obra': 'Job address', 'Fecha de la oferta': 'Bid date', 'Incluye': 'Inclusions', 'Excluye': 'Exclusions', 'Desglose': 'Breakdown',
+  'Mostrar montos por sistema': 'Show amounts by system', 'Solo monto total': 'Lump sum only', 'General contractor': 'General contractor',
+  'El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio.': 'The browser blocked the window. Allow pop-ups for this site.',
+  'Lista de precios exportada. Llena precios y horas y vuelve a importarla.': 'Price list exported. Fill in prices and hours, then import it back.',
+  'No encontré materiales con el mismo nombre': 'No materials with matching names were found', 'Arrastra para cambiar el tamaño': 'Drag to resize'
 };
 const UI_PATTERNS = [
   [/^(Lineal|Área|Conteo)( · .*)$/, (m, a, b) => UI_EN[a] + b],
@@ -1243,6 +1432,9 @@ const UI_PATTERNS = [
   [/^Aplicar escala (.+)$/, (m, a) => 'Apply scale ' + a],
   [/^Precio por (pieza|\S+), se multiplica por la cantidad con desperdicio\.$/, (m, a) => `Price per ${a === 'pieza' ? 'each' : a}, multiplied by the quantity with waste.`],
   [/^No tienes condiciones de tipo (\S+)\. Crea una para empezar a medir\.$/, (m, a) => `You have no ${({ lineal: 'linear', 'área': 'area', conteo: 'count' })[a] || a} conditions. Create one to start measuring.`],
+  [/^(\d+) material\(es\) actualizados$/, (m, a) => `${a} material(s) updated`],
+  [/^(Impuesto|Overhead|Utilidad) \((.*)\)$/, (m, a, b) => `${UI_EN[a]} (${b})`],
+  [/^Mano de obra \((.*) h × (.*)\)$/, (m, a, b) => `Labor (${a} hr × ${b})`],
   [/^(\d+) condición\(es\) importadas o actualizadas$/, (m, a) => `${a} condition(s) imported or updated`],
   [/^No se pudo abrir el PDF: (.*)$/, (m, a) => 'Could not open the PDF: ' + a],
   [/^No se pudo leer el archivo: (.*)$/, (m, a) => 'Could not read the file: ' + a],
@@ -1291,7 +1483,7 @@ function setUiLang(l) {
 }
 
 /* ---------- Init ---------- */
-S.conditions = presetConditions(); S.activeCond = S.conditions[0].id;
+S.conditions = presetConditions(); S.activeCond = S.conditions[0].id; S.est = defaultEst();
 setTool('select');
 refresh();
 try { const l = localStorage.getItem('smarttakeoff:lang'); if (l) $('#expLang').value = l; } catch (e) { }
