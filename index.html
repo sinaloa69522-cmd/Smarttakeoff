@@ -478,7 +478,7 @@ function redo() { if (!S.redo.length) return; S.undo.push(snapshot()); restore(S
 function projectData() { return { app: 'SmartTakeoff', version: 1, fileName: S.fileName, units: S.units, pages: S.pages, items: S.items, conditions: S.conditions, est: S.est, sheets: S.sheets.map(({ doc, page, name, auto, disc }) => ({ doc, page, name, auto, disc })) }; }
 function defaultEst() {
   let co = {}; try { co = JSON.parse(localStorage.getItem('smarttakeoff:company') || '{}'); } catch (e) { }
-  return { rate: 95, tax: 8.25, oh: 10, profit: 10, company: co.company || '', contact: co.contact || '', client: '', project: '', address: '', bidDate: '', estimator: co.estimator || '',
+  return { rate: 95, tax: 8.25, oh: 10, profit: 10, company: co.company || '', contact: co.contact || '', logo: co.logo || '', notes: co.notes || 'Payment terms: Net 30 days. Retainage per contract.', validText: '', client: '', project: '', address: '', bidDate: '', estimator: co.estimator || '',
     inclusions: 'Materials and labor for the mechanical and plumbing scope shown on the drawings listed.\nHangers and supports.\nTesting of piping systems.',
     exclusions: 'Permits and fees.\nElectrical power and controls wiring.\nCutting, patching and painting.\nOvertime and premium time.\nEngineering and test & balance unless noted.', bySystem: true };
 }
@@ -1258,27 +1258,66 @@ $('#tableWrap').addEventListener('change', e => {
   const f = e.target.closest('[data-est]'); if (!f) return;
   S.est[f.dataset.est] = +f.value || 0; autosave(); renderTable();
 });
+function saveCompany(e) {
+  try { localStorage.setItem('smarttakeoff:company', JSON.stringify({ company: e.company, contact: e.contact, estimator: e.estimator, logo: e.logo || '', notes: e.notes || '' })); } catch (err) { }
+}
+// Read an image file and shrink it to a light PNG/JPEG data URL for the proposal header
+function readLogo(file) {
+  return new Promise((res, rej) => {
+    if (!file || !/^image\//.test(file.type)) { rej(new Error('Elige una imagen (PNG, JPG o SVG)')); return; }
+    const fr = new FileReader();
+    fr.onerror = () => rej(fr.error);
+    fr.onload = () => {
+      const img = new Image();
+      img.onerror = () => rej(new Error('No se pudo leer la imagen'));
+      img.onload = () => {
+        const k = Math.min(1, 600 / img.width, 240 / img.height);
+        const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(img.width * k)); cv.height = Math.max(1, Math.round(img.height * k));
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        res(cv.toDataURL('image/png'));
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+// Called from the proposal window when the logo is changed there
+async function setProposalLogo(file) { const u = await readLogo(file); S.est.logo = u; saveCompany(S.est); autosave(); return u; }
+function proposalEdited() { saveCompany(S.est); autosave(); }
 function proposalInfo() {
   const e = S.est;
   const fld = (k, l, ph) => `<label>${l}</label><input type="text" id="p_${k}" value="${esc(e[k])}" placeholder="${ph || ''}">`;
+  let logo = e.logo || '';
   modal(`<h3>Datos de la propuesta</h3><div class="form">
+    <label>Logo</label><div style="display:flex;gap:8px;align-items:center"><img id="p_logoImg" alt="" style="max-height:48px;max-width:160px;${logo ? '' : 'display:none'}"><button type="button" id="p_logoBtn">Subir logo…</button><button type="button" id="p_logoDel" ${logo ? '' : 'hidden'}>Quitar</button><input type="file" id="p_logoIn" accept="image/*" hidden></div>
     ${fld('company', 'Empresa', 'ABC Mechanical LLC')}${fld('contact', 'Contacto / licencia', 'Phone · email · License #')}${fld('estimator', 'Estimador')}
     ${fld('client', 'Cliente', 'General contractor')}${fld('project', 'Proyecto')}${fld('address', 'Dirección de la obra')}${fld('bidDate', 'Fecha de la oferta', 'MM/DD/YYYY')}
     <label>Incluye</label><textarea id="p_inclusions" rows="4">${esc(e.inclusions)}</textarea>
     <label>Excluye</label><textarea id="p_exclusions" rows="5">${esc(e.exclusions)}</textarea>
+    <label>Notas y condiciones</label><textarea id="p_notes" rows="3" placeholder="Payment terms, schedule, alternates…">${esc(e.notes || '')}</textarea>
     <label>Desglose</label><select id="p_bySystem"><option value="1">Mostrar montos por sistema</option><option value="0">Solo monto total</option></select>
+    <div class="hint">También puedes editar cualquier texto directamente en la propuesta antes de imprimirla.</div>
   </div>`, [{ t: 'Cancelar' }, { t: 'Guardar', primary: true, f: () => {
-    ['company', 'contact', 'estimator', 'client', 'project', 'address', 'bidDate', 'inclusions', 'exclusions'].forEach(k => e[k] = $('#p_' + k).value);
+    ['company', 'contact', 'estimator', 'client', 'project', 'address', 'bidDate', 'inclusions', 'exclusions', 'notes'].forEach(k => e[k] = $('#p_' + k).value);
+    e.logo = logo;
     e.bySystem = $('#p_bySystem').value === '1';
-    try { localStorage.setItem('smarttakeoff:company', JSON.stringify({ company: e.company, contact: e.contact, estimator: e.estimator })); } catch (err) { }
+    saveCompany(e);
     autosave();
   } }]);
   $('#p_bySystem').value = e.bySystem ? '1' : '0';
+  if (logo) $('#p_logoImg').src = logo;
+  $('#p_logoBtn').addEventListener('click', () => $('#p_logoIn').click());
+  $('#p_logoDel').addEventListener('click', () => { logo = ''; $('#p_logoImg').style.display = 'none'; $('#p_logoDel').hidden = true; });
+  $('#p_logoIn').addEventListener('change', async ev => {
+    try { logo = await readLogo(ev.target.files[0]); $('#p_logoImg').src = logo; $('#p_logoImg').style.display = ''; $('#p_logoDel').hidden = false; }
+    catch (err) { toast(err.message); }
+    ev.target.value = '';
+  });
 }
 function openProposal() {
   const e = S.est, t = estimate(), en = expEN();
-  const L = en ? { title: 'PROPOSAL', to: 'To', project: 'Project', address: 'Location', date: 'Date', est: 'Estimator', scope: 'Scope of Work', sys: 'System', amt: 'Amount', total: 'Total Base Bid', inc: 'Inclusions', exc: 'Exclusions', drawings: 'Based on drawing', valid: 'This proposal is valid for 30 days from the date above.', acc: 'Accepted by', sig: 'Signature', print: 'Print / Save as PDF', items: 'Includes' }
-    : { title: 'PROPUESTA', to: 'Para', project: 'Proyecto', address: 'Ubicación', date: 'Fecha', est: 'Estimador', scope: 'Alcance del trabajo', sys: 'Sistema', amt: 'Monto', total: 'Total de la oferta', inc: 'Incluye', exc: 'Excluye', drawings: 'Basado en el plano', valid: 'Esta propuesta es válida por 30 días a partir de la fecha indicada.', acc: 'Aceptado por', sig: 'Firma', print: 'Imprimir / Guardar como PDF', items: 'Incluye' };
+  const L = en ? { title: 'PROPOSAL', to: 'To', project: 'Project', address: 'Location', date: 'Date', est: 'Estimator', scope: 'Scope of Work', sys: 'System', amt: 'Amount', total: 'Total Base Bid', inc: 'Inclusions', exc: 'Exclusions', drawings: 'Based on drawing', valid: 'This proposal is valid for 30 days from the date above.', acc: 'Accepted by', sig: 'Signature', print: 'Print / Save as PDF', items: 'Includes', notes: 'Notes & Terms', hint: '✎ Click any text to edit it before printing', logo: 'Logo…', noLogo: 'Remove logo' }
+    : { title: 'PROPUESTA', to: 'Para', project: 'Proyecto', address: 'Ubicación', date: 'Fecha', est: 'Estimador', scope: 'Alcance del trabajo', sys: 'Sistema', amt: 'Monto', total: 'Total de la oferta', inc: 'Incluye', exc: 'Excluye', drawings: 'Basado en el plano', valid: 'Esta propuesta es válida por 30 días a partir de la fecha indicada.', acc: 'Aceptado por', sig: 'Firma', print: 'Imprimir / Guardar como PDF', items: 'Incluye', notes: 'Notas y condiciones', hint: '✎ Haz clic en cualquier texto para editarlo antes de imprimir', logo: 'Logo…', noLogo: 'Quitar logo' };
   const date = e.bidDate || new Date().toLocaleDateString('en-US');
   const scopeItems = name => [...new Set(S.items.filter(isMeasure).map(it => condById(it.cond)).filter(c => c && (c.system || '—') === name).map(c => c.name))].join(', ');
   const lines = s => esc(s).split('\n').filter(x => x.trim()).map(x => `<li>${x}</li>`).join('');
@@ -1290,20 +1329,49 @@ function openProposal() {
     .n{text-align:right;white-space:nowrap} .tot td{font-weight:700;font-size:15px;border-top:2px solid #1d2330;border-bottom:0}
     .meta td{border:0;padding:2px 8px 2px 0} h2{font-size:14px;text-transform:uppercase;letter-spacing:.6px;margin:20px 0 4px}
     .sig{display:flex;gap:40px;margin-top:40px} .sig div{flex:1;border-top:1px solid #1d2330;padding-top:4px;color:#677084}
-    .bar{position:sticky;top:0;background:#fff;padding:8px 0;text-align:right} @media print{.bar{display:none} body{margin:0}}
+    .bar{position:sticky;top:0;background:#fff;padding:8px 0;display:flex;gap:8px;align-items:center;justify-content:flex-end;z-index:2;border-bottom:1px solid #eee}
+    .bar .hint{margin-right:auto;color:#677084} .bar button,.bar label{font:inherit;padding:5px 10px;border:1px solid #ccd;border-radius:6px;background:#fff;cursor:pointer} .bar .pri{background:#d9480f;color:#fff;border-color:#d9480f}
+    [contenteditable]:hover{outline:1px dashed #c5cad3;outline-offset:2px} [contenteditable]:focus{outline:2px solid #ffa94d;outline-offset:2px}
+    .brand{display:flex;gap:14px;align-items:center} #logo{max-height:70px;max-width:220px}
+    @media print{.bar{display:none} body{margin:0} [contenteditable]{outline:0!important}}
   </style></head><body>
-  <div class="bar"><button onclick="window.print()">${L.print}</button></div>
-  <header><div><div class="co">${esc(e.company || 'Your Company')}</div><div class="muted">${esc(e.contact)}</div></div><h1>${L.title}</h1></header>
-  <table class="meta"><tr><td class="muted">${L.to}</td><td>${esc(e.client)}</td><td class="muted">${L.date}</td><td>${esc(date)}</td></tr>
-  <tr><td class="muted">${L.project}</td><td>${esc(e.project || baseName())}</td><td class="muted">${L.est}</td><td>${esc(e.estimator)}</td></tr>
-  <tr><td class="muted">${L.address}</td><td colspan="3">${esc(e.address)}</td></tr></table>
+  <div class="bar"><span class="hint">${L.hint}</span><label>${L.logo}<input type="file" id="logoIn" accept="image/*" hidden></label><button id="logoDel" ${e.logo ? '' : 'hidden'}>${L.noLogo}</button><button class="pri" onclick="window.print()">${L.print}</button></div>
+  <header><div class="brand"><img id="logo" alt="" src="${e.logo || ''}" ${e.logo ? '' : 'hidden'}><div><div class="co" data-k="company">${esc(e.company || 'Your Company')}</div><div class="muted" data-k="contact">${esc(e.contact)}</div></div></div><h1>${L.title}</h1></header>
+  <table class="meta"><tr><td class="muted">${L.to}</td><td data-k="client">${esc(e.client)}</td><td class="muted">${L.date}</td><td data-k="bidDate">${esc(date)}</td></tr>
+  <tr><td class="muted">${L.project}</td><td data-k="project">${esc(e.project || baseName())}</td><td class="muted">${L.est}</td><td data-k="estimator">${esc(e.estimator)}</td></tr>
+  <tr><td class="muted">${L.address}</td><td colspan="3" data-k="address">${esc(e.address)}</td></tr></table>
   <h2>${L.scope}</h2><p class="muted">${L.drawings}: ${esc(S.fileName || '')}</p>
   <table><thead><tr><th>${L.sys}</th><th>${L.items}</th>${e.bySystem ? `<th class="n">${L.amt}</th>` : ''}</tr></thead><tbody>
   ${t.systems.map(r => `<tr><td>${esc(r.name)}</td><td>${esc(scopeItems(r.name))}</td>${e.bySystem ? `<td class="n">${money(r.total)}</td>` : ''}</tr>`).join('')}
   <tr class="tot"><td colspan="${e.bySystem ? 2 : 1}">${L.total}</td><td class="n">${money(t.total)}</td></tr></tbody></table>
-  <h2>${L.inc}</h2><ul>${lines(e.inclusions)}</ul><h2>${L.exc}</h2><ul>${lines(e.exclusions)}</ul>
-  <p class="muted">${L.valid}</p>
+  <h2>${L.inc}</h2><ul data-k="inclusions" data-list="1">${lines(e.inclusions) || '<li></li>'}</ul><h2>${L.exc}</h2><ul data-k="exclusions" data-list="1">${lines(e.exclusions) || '<li></li>'}</ul>
+  ${(e.notes || '').trim() ? `<h2>${L.notes}</h2><p data-k="notes" style="white-space:pre-line">${esc(e.notes)}</p>` : ''}
+  <p class="muted" data-k="validText">${esc(e.validText || L.valid)}</p>
   <div class="sig"><div>${L.acc}</div><div>${L.sig}</div><div>${L.date}</div></div>
+  <script>
+  (function () {
+    var host = 'h1,h2,p,td,th,ul,.co,.brand .muted,.sig div';
+    document.querySelectorAll(host).forEach(function (el) { el.contentEditable = 'true'; el.spellcheck = true; });
+    function app() { try { return window.opener && window.opener.SmartTakeoff ? window.opener : null; } catch (err) { return null; } }
+    var t;
+    document.querySelectorAll('[data-k]').forEach(function (el) {
+      el.addEventListener('input', function () {
+        var o = app(); if (!o) return; var e = o.SmartTakeoff.est, k = el.dataset.k;
+        e[k] = el.dataset.list ? Array.prototype.map.call(el.querySelectorAll('li'), function (li) { return li.innerText.trim(); }).filter(Boolean).join('\\n') : el.innerText.trim();
+        clearTimeout(t); t = setTimeout(function () { o.proposalEdited(); }, 500);
+      });
+    });
+    var img = document.getElementById('logo'), del = document.getElementById('logoDel');
+    document.getElementById('logoIn').addEventListener('change', function (ev) {
+      var f = ev.target.files[0], o = app(); if (!f) return;
+      var show = function (u) { img.src = u; img.hidden = false; del.hidden = false; };
+      if (o) o.setProposalLogo(f).then(show, function (err) { alert(err.message); });
+      else { var r = new FileReader(); r.onload = function () { show(r.result); }; r.readAsDataURL(f); }
+      ev.target.value = '';
+    });
+    del.addEventListener('click', function () { img.hidden = true; img.removeAttribute('src'); del.hidden = true; var o = app(); if (o) { o.SmartTakeoff.est.logo = ''; o.proposalEdited(); } });
+  })();
+  <\/script>
   </body></html>`;
   const win = window.open('', '_blank');
   if (!win) { toast('El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio.'); return; }
@@ -2558,6 +2626,7 @@ Object.assign(UI_EN, {
   'Descargar para Windows': 'Download for Windows', 'Cerrar': 'Close', 'SmartTakeoff quedó instalada. Búscala en tu escritorio o menú de inicio.': 'SmartTakeoff is installed. Find it on your desktop or Start menu.'
 });
 
+Object.assign(UI_EN, { 'Logo': 'Logo', 'Subir logo…': 'Upload logo…', 'Quitar': 'Remove', 'Notas y condiciones': 'Notes & terms', 'También puedes editar cualquier texto directamente en la propuesta antes de imprimirla.': 'You can also edit any text right on the proposal before printing it.', 'Elige una imagen (PNG, JPG o SVG)': 'Choose an image (PNG, JPG or SVG)', 'No se pudo leer la imagen': 'Could not read the image' });
 /* ---------- Init ---------- */
 S.conditions = presetConditions(); S.activeCond = S.conditions[0].id; S.est = defaultEst();
 setTool('select');
