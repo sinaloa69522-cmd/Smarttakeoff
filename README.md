@@ -64,6 +64,12 @@ La interfaz está **en inglés** por defecto; cambia a español con el selector 
 - **Buscar símbolo** (B): encierra un símbolo con un recuadro y la app encuentra todos los iguales en la hoja o en todas las hojas, incluso girados. Quita con un clic los que no apliquen y agrégalos como conteo. Funciona también en planos sin texto.
 - **Muros y concreto**: las condiciones lineales aceptan altura de muro (largo × altura = área de muro) y las de área o lineales un espesor para sacar el volumen en yd³. Nuevos ensambles "por área de muro", "por volumen" y "por perímetro del área".
 
+## Instalar la app
+
+- Botón **⤓ Instalar app** arriba a la derecha. En Chrome o Edge instala SmartTakeoff en un clic: abre en su propia ventana, queda en el escritorio y menú Inicio, funciona sin internet y se actualiza sola.
+- En iPhone/iPad: Safari › Compartir › Agregar a pantalla de inicio.
+- Instalador clásico de Windows: [SmartTakeoff-Setup.exe](https://github.com/sinaloa69522-cmd/Smarttakeoff/releases/latest/download/SmartTakeoff-Setup.exe) (cada versión se publica en Releases al crear una etiqueta `v*`).
+
 ## Condiciones
 Cada condición define sistema, material, tamaño, forma de ducto (ancho×alto o diámetro), largo de pieza, separación de soportes, % de desperdicio y precio unitario.
 Puedes editar la hoja *Condiciones* del Excel exportado y volver a cargarla con **Importar**.
