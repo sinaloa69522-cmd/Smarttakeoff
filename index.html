@@ -39,7 +39,7 @@ header .brand{font-weight:700;letter-spacing:.2px;margin-right:6px}
 header .brand span{color:var(--accent)}
 .grp{display:flex;gap:3px;align-items:center;padding-right:8px;margin-right:2px;border-right:1px solid var(--line)}
 .grp:last-child{border-right:0}
-.tool kbd{font-size:10px;opacity:.6;margin-left:3px}
+.tool kbd,#btnSnap kbd{font-size:10px;opacity:.6;margin-left:3px}
 aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 aside h3{margin:0;padding:10px 10px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
 #condList{overflow:auto;flex:1;padding:0 6px 6px}
@@ -52,9 +52,17 @@ aside h3{margin:0;padding:10px 10px 6px;font-size:11px;text-transform:uppercase;
 .cond .nm small{color:var(--muted)}
 .cond .q{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px;text-align:right}
 .cond .ed{visibility:hidden;padding:1px 6px}
+.cond .eye{padding:0 5px;border:0;background:transparent;color:var(--muted);font-size:11px}
+.cond .eye.off{color:var(--line)}
+.cond.hid .nm{opacity:.5}
 .cond:hover .ed{visibility:visible}
-#pageList{max-height:28vh;overflow:auto;padding:0 6px 8px;display:flex;flex-wrap:wrap;gap:4px}
-#pageList button{min-width:36px}
+#pageList{max-height:30vh;overflow:auto;padding:0 6px 8px;display:flex;flex-direction:column;gap:3px}
+#pageList .sheet{display:grid;grid-template-columns:1fr auto;text-align:left;padding:4px 8px}
+#pageList .sheet b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pageList .sheet small{grid-column:1;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pageList .sheet.on small{color:inherit;opacity:.85}
+#pageList .sheet .cnt{grid-row:1/3;grid-column:2;align-self:center;font-size:11px;background:var(--hover);color:var(--ink);border-radius:9px;padding:0 6px}
+#pageList .sheet.missing{opacity:.55;border-style:dashed}
 main{display:grid;grid-template-rows:1fr 6px var(--bottomH,260px);grid-template-columns:minmax(0,1fr);min-height:0;min-width:0}
 #viewer{position:relative;overflow:auto;background:var(--viewer);min-height:0}
 #stage{position:relative;margin:24px;display:inline-block;box-shadow:0 2px 12px rgba(0,0,0,.25);background:#fff}
@@ -127,7 +135,9 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
       <button class="tool" data-tool="area" title="Medición de área (A)">Área<kbd>A</kbd></button>
       <button class="tool" data-tool="count" title="Conteo (C)">Conteo<kbd>C</kbd></button>
       <button class="tool" data-tool="cloud" title="Nube de revisión (R)">Nube<kbd>R</kbd></button>
+      <button class="tool" data-tool="deduct" title="Deducir un hueco de un área (D)">Deducir<kbd>D</kbd></button>
       <button class="tool" data-tool="text" title="Nota de texto (T)">Texto<kbd>T</kbd></button>
+      <button id="btnSnap" class="on" title="Ajustar a líneas del plano y a puntos de otras mediciones (S)">Snap<kbd>S</kbd></button>
     </div>
     <div class="grp">
       <select id="scaleSel" title="Escala de la página"></select>
@@ -137,6 +147,10 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
       <span id="zoomLbl" style="min-width:44px;text-align:center">100%</span>
       <button id="zoomIn" title="Acercar (+)">+</button>
       <button id="zoomFit" title="Ajustar a la ventana">Ajustar</button>
+    </div>
+    <div class="grp">
+      <label for="opacity" style="color:var(--muted);font-size:12px">Marcas</label>
+      <input id="opacity" type="range" min="10" max="100" value="100" title="Opacidad de las marcas" style="width:80px">
     </div>
     <div class="grp">
       <button id="undo" title="Deshacer (Ctrl+Z)">↶</button>
@@ -156,7 +170,8 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
     <input id="fileCond" type="file" accept=".xlsx,.xls,.csv" hidden>
     <input id="filePrice" type="file" accept=".xlsx,.xls,.csv" hidden>
     <div id="condList"></div>
-    <h3>Páginas <span id="pageInfo"></span></h3>
+    <h3>Hojas <span><span id="pageInfo"></span> <button id="btnAddPdf" title="Agregar otro PDF al proyecto">+ PDF</button></span></h3>
+    <input id="filePdf2" type="file" accept="application/pdf,.pdf" multiple hidden>
     <div id="pageList"></div>
   </aside>
 
@@ -217,7 +232,7 @@ if (location.protocol === 'file:') {
 /* ---------- State ---------- */
 const $ = s => document.querySelector(s);
 const S = {
-  pdf: null, fileName: '', pageNum: 1, numPages: 0, zoom: 1, pageW: 0, pageH: 0,
+  pdf: null, pdfs: {}, sheets: [], fileName: '', pageNum: 1, numPages: 0, snap: true, snapHit: null, zoom: 1, pageW: 0, pageH: 0,
   tool: 'select', units: 'imperial',
   pages: {},        // page -> {cal: base units per PDF point, calLabel}
   items: [],        // measurements + annotations
@@ -294,6 +309,7 @@ const typeName = { linear: 'Lineal', area: 'Área', count: 'Conteo', cloud: 'Nub
 const dist = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
 const polyLen = pts => pts.reduce((s, p, i) => i ? s + dist(pts[i - 1], p) : 0, 0);
 const polyArea = pts => Math.abs(pts.reduce((s, p, i) => { const q = pts[(i + 1) % pts.length]; return s + p[0] * q[1] - q[0] * p[1]; }, 0)) / 2;
+const inPoly = (p, pts) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const a = pts[i], b = pts[j]; if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
 const centroid = pts => pts.reduce((a, p) => [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length], [0, 0]);
 const cal = page => (S.pages[page] && S.pages[page].cal) || null;
 
@@ -302,7 +318,7 @@ function qty(it) {
   if (it.type === 'count') return { q: it.points.length, unit: 'pza', ok: true };
   if (!k) return { q: 0, unit: it.type === 'area' ? U().area : U().len, ok: false };
   if (it.type === 'linear') return { q: polyLen(it.points) * k, unit: U().len, ok: true };
-  if (it.type === 'area') return { q: polyArea(it.points) * k * k, unit: U().area, ok: true, per: polyLen([...it.points, it.points[0]]) * k };
+  if (it.type === 'area') return { q: Math.max(0, polyArea(it.points) - (it.holes || []).reduce((s, h) => s + polyArea(h), 0)) * k * k, unit: U().area, ok: true, per: polyLen([...it.points, it.points[0]]) * k };
   return { q: 0, unit: '', ok: false };
 }
 // Material breakdown (despiece) for one measurement
@@ -425,7 +441,7 @@ function pushUndo() { S.undo.push(snapshot()); if (S.undo.length > 100) S.undo.s
 function restore(json) { const o = JSON.parse(json); S.items = o.items; S.pages = o.pages; S.conditions = o.conditions; S.selected = null; S.openCount = null; refresh(); }
 function undo() { if (!S.undo.length) return; S.redo.push(snapshot()); restore(S.undo.pop()); }
 function redo() { if (!S.redo.length) return; S.undo.push(snapshot()); restore(S.redo.pop()); }
-function projectData() { return { app: 'SmartTakeoff', version: 1, fileName: S.fileName, units: S.units, pages: S.pages, items: S.items, conditions: S.conditions, est: S.est }; }
+function projectData() { return { app: 'SmartTakeoff', version: 1, fileName: S.fileName, units: S.units, pages: S.pages, items: S.items, conditions: S.conditions, est: S.est, sheets: S.sheets.map(({ doc, page, name, auto }) => ({ doc, page, name, auto })) }; }
 function defaultEst() {
   let co = {}; try { co = JSON.parse(localStorage.getItem('smarttakeoff:company') || '{}'); } catch (e) { }
   return { rate: 95, tax: 8.25, oh: 10, profit: 10, company: co.company || '', contact: co.contact || '', client: '', project: '', address: '', bidDate: '', estimator: co.estimator || '',
@@ -439,30 +455,54 @@ function autosave() {
 }
 function loadProjectData(o) {
   if (!o || !Array.isArray(o.items)) throw new Error('Archivo de proyecto no válido');
-  S.units = o.units || 'imperial'; S.pages = o.pages || {}; S.items = o.items; S.conditions = o.conditions || []; S.est = Object.assign(defaultEst(), o.est || {});
+  S.units = o.units || 'imperial'; S.pages = o.pages || {}; S.items = o.items; S.conditions = o.conditions || []; S.est = Object.assign(defaultEst(), o.est || {}); S.sheets = Array.isArray(o.sheets) ? o.sheets : [];
   S.activeCond = S.conditions[0] ? S.conditions[0].id : null;
   $('#unitsSel').value = S.units;
 }
 
 /* ---------- PDF loading & rendering ---------- */
-async function openPdf(file) {
+const sheetName = n => { const sh = S.sheets[n - 1]; return sh ? sh.name : String(n); };
+function buildSheets(doc, count) { return Array.from({ length: count }, (_, i) => ({ doc, page: i + 1, name: `${doc.replace(/\.pdf$/i, '')} p${i + 1}`, auto: true })); }
+// Look for a sheet number like M-101, P2.01 or H-3 in the title block (lower-right text wins)
+async function detectSheetName(pdf, pageNo) {
+  try {
+    const page = await pdf.getPage(pageNo); const vp = page.getViewport({ scale: 1 }); const tc = await page.getTextContent();
+    const re = /^[A-Z]{1,3}[-.]?\d{1,3}(\.\d{1,3})?[A-Z]?$/;
+    let best = null, score = -Infinity;
+    tc.items.forEach(it => {
+      const t = (it.str || '').trim(); if (!re.test(t)) return;
+      const sc = it.transform[4] / vp.width - it.transform[5] / vp.height + Math.abs(it.transform[0] || 0) / 40;
+      if (sc > score) { score = sc; best = t; }
+    });
+    return best;
+  } catch (e) { return null; }
+}
+async function openPdf(file, append) {
   try {
     await workerReady;
     const buf = await file.arrayBuffer();
     const pdf = await pdfjs.getDocument({ data: buf }).promise;
-    S.pdf = pdf; S.numPages = pdf.numPages; S.pageNum = 1;
-    const sameProject = S.fileName === file.name && S.items.length;
-    S.fileName = file.name;
     let restored = false;
-    if (!sameProject) {
-      S.items = []; S.pages = {}; S.undo = []; S.redo = [];
-      try { const saved = localStorage.getItem('smarttakeoff:' + file.name); if (saved) { loadProjectData(JSON.parse(saved)); restored = true; } } catch (e) { }
-      if (!S.conditions.length) { S.conditions = presetConditions(); S.activeCond = S.conditions[0].id; }
+    if (!append) {
+      const sameProject = S.fileName === file.name && S.items.length;
+      S.fileName = file.name; S.pdfs = {};
+      if (!sameProject) {
+        S.items = []; S.pages = {}; S.undo = []; S.redo = []; S.sheets = [];
+        try { const saved = localStorage.getItem('smarttakeoff:' + file.name); if (saved) { loadProjectData(JSON.parse(saved)); restored = true; } } catch (e) { }
+        if (!S.conditions.length) { S.conditions = presetConditions(); S.activeCond = S.conditions[0].id; }
+      }
     }
+    if (!S.sheets.some(sh => sh.doc === file.name)) S.sheets.push(...buildSheets(file.name, pdf.numPages));
+    S.pdfs[file.name] = pdf; S.pdf = pdf; S.numPages = S.sheets.length;
+    // name sheets from their title blocks (only ones the user has not renamed)
+    for (const sh of S.sheets.filter(x => x.doc === file.name && x.auto)) { const nm = await detectSheetName(pdf, sh.page); if (nm) sh.name = nm; }
     $('#empty').hidden = true; $('#stage').hidden = false;
-    document.title = file.name + ' · SmartTakeoff';
-    await gotoPage(1, true);
-    toast(restored ? 'Se restauró el takeoff guardado de este plano' : `${file.name} · ${S.numPages} página(s)`);
+    document.title = (S.fileName || file.name) + ' · SmartTakeoff';
+    const first = S.sheets.findIndex(sh => sh.doc === file.name) + 1;
+    await gotoPage(append ? first : 1, true);
+    const missing = [...new Set(S.sheets.map(x => x.doc))].filter(d => !S.pdfs[d]);
+    if (missing.length) toast(`Falta abrir: ${missing.join(', ')}. Usa “+ PDF”.`);
+    else toast(restored ? 'Se restauró el takeoff guardado de este plano' : `${file.name} · ${pdf.numPages} página(s)`);
   } catch (e) {
     console.error(e); toast('No se pudo abrir el PDF: ' + e.message);
   }
@@ -473,7 +513,9 @@ async function gotoPage(n, fit) {
   n = Math.max(1, Math.min(S.numPages, n));
   finishDraft(); S.openCount = null;
   S.pageNum = n; S.selected = null;
-  curPage = await S.pdf.getPage(n);
+  const sh = S.sheets[n - 1], doc = sh && S.pdfs[sh.doc];
+  if (!doc) { S.pageNum = n; curPage = null; const cv = $('#pdfCanvas'); cv.width = 1; cv.height = 1; toast(`Abre “${sh ? sh.doc : '?'}” con “+ PDF” para ver esta hoja`); refresh(); return; }
+  curPage = await doc.getPage(sh.page);
   const vp = curPage.getViewport({ scale: 1 });
   S.pageW = vp.width; S.pageH = vp.height;
   if (fit) fitZoom(); else await render();
@@ -545,6 +587,7 @@ function drawOverlay() {
   const items = S.items.filter(it => it.page === S.pageNum);
   for (const it of items) {
     const c = condById(it.cond);
+    if (c && c.hidden) continue;
     const col = c ? c.color : '#e03131';
     const sel = S.selected === it.id;
     const sw = sel ? 4 : 2.5;
@@ -557,7 +600,8 @@ function drawOverlay() {
       const last = it.points[it.points.length - 1];
       h += `<text x="${last[0] + r}" y="${last[1] - r}" font-size="${fs}" fill="${col}">${esc(fmtQty(breakdown(it)))}</text></g>`;
     } else if (it.type === 'area') {
-      h += `<g data-id="${it.id}"><polygon points="${P}" fill="${col}" fill-opacity=".22" stroke="${col}" stroke-width="${sw}" ${dash} vector-effect="non-scaling-stroke"/>`;
+      const D = [it.points, ...(it.holes || [])].map(ring => 'M' + ring.map(q => q.join(',')).join('L') + 'Z').join(' ');
+      h += `<g data-id="${it.id}"><path d="${D}" fill-rule="evenodd" fill="${col}" fill-opacity=".22" stroke="${col}" stroke-width="${sw}" ${dash} vector-effect="non-scaling-stroke"/>`;
       const [cx, cy] = centroid(it.points);
       h += `<text x="${cx}" y="${cy}" font-size="${fs}" fill="${col}" text-anchor="middle">${esc(fmtQty(breakdown(it)))}</text></g>`;
     } else if (it.type === 'count') {
@@ -582,12 +626,18 @@ function drawOverlay() {
   if (d && S.cursor) {
     const pts = [...d.points, S.cursor];
     const c = condById(d.cond);
-    const col = d.type === 'calibrate' ? '#e03131' : d.type === 'cloud' ? '#e03131' : (c ? c.color : '#e03131');
+    const col = d.type === 'calibrate' || d.type === 'cloud' || d.type === 'deduct' ? '#e03131' : (c ? c.color : '#e03131');
     const P = pts.map(p => p.join(',')).join(' ');
-    if (d.type === 'area') h += `<polygon points="${P}" fill="${col}" fill-opacity=".15" stroke="${col}" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
+    if (d.type === 'area' || d.type === 'deduct') h += `<polygon points="${P}" fill="${col}" fill-opacity=".15" stroke="${col}" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
     else if (d.type === 'cloud') h += `<path d="${cloudPath(pts[0], pts[1])}" fill="none" stroke="${col}" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
     else h += `<polyline points="${P}" fill="none" stroke="${col}" stroke-width="2.5" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
     pts.forEach(p => h += `<circle cx="${p[0]}" cy="${p[1]}" r="${r * .5}" fill="${col}"/>`);
+  }
+  if (S.snapHit && S.cursor && SNAP_TOOLS.includes(S.tool)) {
+    const [x, y] = S.snapHit.p, q = 5 / S.zoom;
+    h += S.snapHit.kind === 'corner' ? `<path d="M${x - q},${y}H${x + q}M${x},${y - q}V${y + q}" stroke="#12b886" stroke-width="2" vector-effect="non-scaling-stroke"/><circle cx="${x}" cy="${y}" r="${q}" fill="none" stroke="#12b886" stroke-width="2" vector-effect="non-scaling-stroke"/>`
+      : S.snapHit.kind === 'pt' ? `<rect x="${x - q}" y="${y - q}" width="${q * 2}" height="${q * 2}" fill="none" stroke="#12b886" stroke-width="2" vector-effect="non-scaling-stroke"/>`
+      : `<path d="M${x - q},${y - q}L${x + q},${y + q}M${x - q},${y + q}L${x + q},${y - q}" stroke="#12b886" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
   }
   $('#overlay').innerHTML = h;
 }
@@ -598,6 +648,7 @@ const hints = {
   calibrate: 'Clic en los dos extremos de una cota conocida',
   linear: 'Clic para agregar puntos · doble clic o Enter para terminar · Shift = ortogonal · Esc cancela',
   area: 'Clic en cada vértice · doble clic o Enter para cerrar · Shift = ortogonal · Esc cancela',
+  deduct: 'Dibuja el hueco dentro de un área: clic en cada vértice, doble clic o Enter para restarlo',
   count: 'Clic en cada elemento para contarlo · Enter o Esc para terminar el grupo',
   cloud: 'Clic en dos esquinas opuestas',
   text: 'Clic donde quieres la nota'
@@ -625,6 +676,48 @@ document.querySelectorAll('.tool').forEach(b => b.addEventListener('click', () =
 function evtPt(e) {
   const r = $('#overlay').getBoundingClientRect();
   return [(e.clientX - r.left) / S.zoom, (e.clientY - r.top) / S.zoom];
+}
+const SNAP_TOOLS = ['calibrate', 'linear', 'area', 'deduct', 'cloud'];
+function toggleSnap() { S.snap = !S.snap; $('#btnSnap').classList.toggle('on', S.snap); toast(S.snap ? 'Snap activado' : 'Snap desactivado'); }
+// Snap to vertices of existing takeoffs first, then to the nearest dark line on the rendered drawing
+function snapPt(p) {
+  S.snapHit = null;
+  if (!S.snap || !SNAP_TOOLS.includes(S.tool)) return p;
+  const tol = 9 / S.zoom; let best = null, bd = tol;
+  S.items.forEach(it => { if (it.page !== S.pageNum) return; [...it.points, ...(it.holes || []).flat()].forEach(q => { const dd = dist(p, q); if (dd < bd) { bd = dd; best = q; } }); });
+  if (S.draft) S.draft.points.slice(0, -1).forEach(q => { const dd = dist(p, q); if (dd < bd) { bd = dd; best = q; } });
+  if (best) { S.snapHit = { p: best, kind: 'pt' }; return [best[0], best[1]]; }
+  const cv = $('#pdfCanvas'); if (!cv.width || !S.pageW) return p;
+  const k = cv.width / S.pageW, cx = Math.round(p[0] * k), cy = Math.round(p[1] * k), R = Math.max(4, Math.round(7 * k / S.zoom));
+  const x0 = Math.max(0, cx - R), y0 = Math.max(0, cy - R), w = Math.min(cv.width, cx + R + 1) - x0, h = Math.min(cv.height, cy + R + 1) - y0;
+  if (w <= 0 || h <= 0) return p;
+  let data; try { data = cv.getContext('2d', { willReadFrequently: true }).getImageData(x0, y0, w, h).data; } catch (e) { return p; }
+  const dark = (x, y) => { const i = (y * w + x) * 4; return data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11 < 120; };
+  // straight lines through the window: rows/columns that are mostly dark
+  const lineAt = (horiz) => {
+    const n = horiz ? h : w, len = horiz ? w : h, hits = [];
+    for (let i = 0; i < n; i++) { let c = 0; for (let j = 0; j < len; j++) if (horiz ? dark(j, i) : dark(i, j)) c++; if (c >= len * 0.4) hits.push(i); }
+    if (!hits.length) return null;
+    const c0 = horiz ? cy - y0 : cx - x0; let best = hits[0];
+    hits.forEach(i => { if (Math.abs(i - c0) < Math.abs(best - c0)) best = i; });
+    const grp = hits.filter(i => Math.abs(i - best) <= Math.max(2, k * 1.5));      // the stroke's full thickness
+    return grp.reduce((a, b) => a + b, 0) / grp.length + (horiz ? y0 : x0);
+  };
+  const hy = lineAt(true), vx = lineAt(false);
+  let q, kind = 'line';
+  if (hy != null && vx != null) { q = [vx / k, hy / k]; kind = 'corner'; }
+  else if (hy != null) q = [p[0], hy / k];
+  else if (vx != null) q = [vx / k, p[1]];
+  else {
+    let nx = -1, ny = -1, nd = Infinity;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { if (!dark(x, y)) continue; const dd = (x + x0 - cx) ** 2 + (y + y0 - cy) ** 2; if (dd < nd) { nd = dd; nx = x; ny = y; } }
+    if (nx < 0 || nd > R * R) return p;
+    let sx = 0, sy = 0, n = 0; const r2 = Math.max(2, Math.round(k * 1.2));
+    for (let y = Math.max(0, ny - r2); y <= Math.min(h - 1, ny + r2); y++) for (let x = Math.max(0, nx - r2); x <= Math.min(w - 1, nx + r2); x++) if (dark(x, y)) { sx += x; sy += y; n++; }
+    q = [(x0 + sx / n) / k, (y0 + sy / n) / k];
+  }
+  S.snapHit = { p: q, kind };
+  return q;
 }
 function ortho(p, prev) {
   const dx = p[0] - prev[0], dy = p[1] - prev[1];
@@ -665,9 +758,11 @@ window.addEventListener('mousemove', e => {
   }
   if (!S.pdf || e.target.closest('#overlay') == null && !S.draft) return;
   let p = evtPt(e);
-  if (S.draft && S.draft.points.length && e.shiftKey && S.draft.type !== 'cloud') p = ortho(p, S.draft.points[S.draft.points.length - 1]);
+  if (S.draft && S.draft.points.length && e.shiftKey && S.draft.type !== 'cloud') { p = ortho(p, S.draft.points[S.draft.points.length - 1]); S.snapHit = null; }
+  else p = snapPt(p);
   S.cursor = p;
-  if (S.draft) { drawOverlay(); liveReadout(); }
+  if (S.draft || S.snapHit || S.hadSnap) { drawOverlay(); liveReadout(); }
+  S.hadSnap = !!S.snapHit;
 });
 window.addEventListener('mouseup', () => {
   if (pan) { if (!pan.moved && S.tool === 'select') select(null); pan = null; ov.style.cursor = S.tool === 'select' ? 'grab' : 'crosshair'; }
@@ -675,9 +770,9 @@ window.addEventListener('mouseup', () => {
 });
 ov.addEventListener('click', e => {
   if (!S.pdf || S.tool === 'select' || e.button !== 0 || spaceDown) return;
-  let p = evtPt(e);
+  let p = (S.snapHit && S.cursor) ? S.cursor : evtPt(e);
   const t = S.tool;
-  if (e.detail >= 2) { if (t === 'linear' || t === 'area') finishDraft(); return; }
+  if (e.detail >= 2) { if (t === 'linear' || t === 'area' || t === 'deduct') finishDraft(); return; }
   if (t === 'count') { addCount(p); return; }
   if (t === 'text') { addText(p); return; }
   if (!S.draft) S.draft = { type: t, cond: S.activeCond, points: [] };
@@ -705,7 +800,7 @@ function liveReadout() {
   if (d.type === 'linear' || d.type === 'calibrate') {
     const L = polyLen(pts);
     txt = k ? 'Longitud: ' + fmtLen(L * k) : `Longitud: ${nf(L, 1)} pt (sin escala)`;
-  } else if (d.type === 'area' && pts.length > 2) {
+  } else if ((d.type === 'area' || d.type === 'deduct') && pts.length > 2) {
     const A = polyArea(pts);
     txt = k ? `Área: ${nf(A * k * k)} ${U().area}` : `Área: ${nf(A, 0)} pt² (sin escala)`;
   }
@@ -716,8 +811,14 @@ function finishDraft() {
   const d = S.draft; S.draft = null; $('#stLive').textContent = '';
   if (!d) return;
   if (d.type === 'calibrate') { if (d.points.length === 2) calibrateDialog(dist(d.points[0], d.points[1])); return; }
-  const min = d.type === 'area' ? 3 : 2;
+  const min = d.type === 'area' || d.type === 'deduct' ? 3 : 2;
   if (d.points.length < min) { drawOverlay(); return; }
+  if (d.type === 'deduct') {
+    const c0 = centroid(d.points);
+    const host = S.items.filter(x => x.page === S.pageNum && x.type === 'area').reverse().find(x => inPoly(c0, x.points));
+    if (!host) { toast('Dibuja la deducción dentro de un área medida'); drawOverlay(); return; }
+    pushUndo(); (host.holes || (host.holes = [])).push(d.points); toast('Deducción restada del área'); refresh(); return;
+  }
   pushUndo();
   const it = { id: newId('m'), page: S.pageNum, type: d.type, points: d.points };
   if (d.type !== 'cloud') it.cond = d.cond;
@@ -792,7 +893,8 @@ window.addEventListener('keydown', e => {
   if (e.key === 'PageUp') { gotoPage(S.pageNum - 1); return; }
   if (e.key === '+' || e.key === '=') { setZoom(S.zoom * 1.25); return; }
   if (e.key === '-') { setZoom(S.zoom / 1.25); return; }
-  const map = { v: 'select', k: 'calibrate', l: 'linear', a: 'area', c: 'count', r: 'cloud', t: 'text' };
+  if (k === 's' && S.pdf) { toggleSnap(); return; }
+  const map = { v: 'select', k: 'calibrate', l: 'linear', a: 'area', c: 'count', r: 'cloud', t: 'text', d: 'deduct' };
   if (map[k] && S.pdf) setTool(map[k]);
 });
 window.addEventListener('keyup', e => { if (e.key === ' ') { spaceDown = false; ov.style.cursor = S.tool === 'select' ? 'grab' : 'crosshair'; } });
@@ -808,16 +910,19 @@ function renderConditions() {
   $('#condList').innerHTML = S.conditions.map(c => {
     const q = t[c.id] || 0;
     const qs = c.type === 'count' ? q + ' pza' : c.type === 'linear' ? fmtLen(q) : nf(q) + ' ' + U().area;
-    return `<div class="cond ${c.id === S.activeCond ? 'active' : ''}" data-cid="${c.id}">
+    return `<div class="cond ${c.id === S.activeCond ? 'active' : ''} ${c.hidden ? 'hid' : ''}" data-cid="${c.id}">
       <span class="sw" style="background:${esc(c.color)}"></span>
       <span class="nm"><b>${esc(c.name)}</b><small>${typeName[c.type]}${c.system ? ' · ' + esc(c.system) : ''}</small></span>
       <span class="q">${q ? esc(qs) : ''}</span>
+      <button class="eye ${c.hidden ? 'off' : ''}" data-eye="${c.id}" title="${c.hidden ? 'Mostrar en el plano' : 'Ocultar en el plano'}">${c.hidden ? '○' : '●'}</button>
       <button class="ed" data-edit="${c.id}" title="Editar">✎</button></div>`;
   }).join('') || '<p style="padding:8px;color:var(--muted)">Sin condiciones. Crea una con “+ Nueva”.</p>';
 }
 $('#condList').addEventListener('click', e => {
   const ed = e.target.closest('[data-edit]');
   if (ed) { editCondition(ed.dataset.edit); return; }
+  const eye = e.target.closest('[data-eye]');
+  if (eye) { const c = condById(eye.dataset.eye); c.hidden = !c.hidden; refresh(); return; }
   const row = e.target.closest('[data-cid]');
   if (!row) return;
   const c = condById(row.dataset.cid);
@@ -961,7 +1066,7 @@ function renderTable() {
     if (!rows.length) { w.innerHTML = `<p style="padding:12px;color:var(--muted)">Aún no hay mediciones. Elige una condición a la izquierda y mide sobre el plano.</p>`; return; }
     const opts = (it) => S.conditions.filter(c => c.type === it.type).map(c => `<option value="${c.id}" ${c.id === it.cond ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
     w.innerHTML = `<table><thead><tr><th>#</th><th>Pág.</th><th>Condición</th><th>Tipo</th><th class="n">Cantidad</th><th class="n">C/desperdicio</th><th class="n">Piezas</th><th class="n">Lámina (${U().area})</th><th class="n">Cal.</th><th class="n">Peso (${U().wt})</th><th class="n">Soportes</th><th class="n">Codos 90°</th><th class="n">Codos 45°</th><th class="n">Vertical (${U().len})</th><th class="n">Drops</th><th class="n">Costo</th><th class="n">Horas</th><th></th></tr></thead><tbody>${rows.map(({ it, c, b, i }) => `
-      <tr data-id="${it.id}" class="${S.selected === it.id ? 'sel' : ''}"><td>${i}</td><td>${it.page}</td>
+      <tr data-id="${it.id}" class="${S.selected === it.id ? 'sel' : ''}"><td>${i}</td><td>${esc(sheetName(it.page))}</td>
       <td><span class="sw" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${esc(c.color)};margin-right:5px"></span><select data-cond="${it.id}">${opts(it)}</select></td>
       <td>${typeName[it.type]}</td>
       <td class="n">${b.ok ? esc(fmtQty(b)) : '<span class="nocal">sin escala</span>'}</td>
@@ -1125,11 +1230,20 @@ document.querySelectorAll('#tabs [data-tab]').forEach(b => b.addEventListener('c
 function renderPages() {
   const pc = n => S.items.filter(i => i.page === n && isMeasure(i)).length;
   let h = '';
-  for (let n = 1; n <= S.numPages; n++) h += `<button data-page="${n}" class="${n === S.pageNum ? 'on' : ''}" title="${pc(n)} medición(es)${cal(n) ? '' : ' · sin escala'}">${n}${cal(n) ? '' : '*'}</button>`;
+  for (let n = 1; n <= S.numPages; n++) {
+    const sh = S.sheets[n - 1] || {}; const k = pc(n);
+    h += `<button data-page="${n}" class="sheet ${n === S.pageNum ? 'on' : ''} ${S.pdfs[sh.doc] ? '' : 'missing'}" title="${k} medición(es)${cal(n) ? '' : ' · sin escala'}"><b>${esc(sh.name || n)}</b><small>${esc((sh.doc || '').replace(/\.pdf$/i, ''))} · p${sh.page || n}${cal(n) ? '' : ' · sin escala'}</small>${k ? `<span class="cnt">${k}</span>` : ''}</button>`;
+  }
   $('#pageList').innerHTML = h;
   $('#pageInfo').textContent = S.numPages ? `${S.pageNum} / ${S.numPages}` : '';
 }
 $('#pageList').addEventListener('click', e => { const b = e.target.closest('[data-page]'); if (b) gotoPage(+b.dataset.page); });
+$('#pageList').addEventListener('dblclick', e => {
+  const b = e.target.closest('[data-page]'); if (!b) return; const sh = S.sheets[+b.dataset.page - 1]; if (!sh) return;
+  modal(`<h3>Nombre de la hoja</h3><div class="form"><label>Nombre</label><input type="text" id="shName" value="${esc(sh.name)}" autofocus></div>`, [{ t: 'Cancelar' }, { t: 'Guardar', primary: true, f: () => { const v = $('#shName').value.trim(); if (v) { sh.name = v; sh.auto = false; refresh(); } } }]);
+});
+$('#btnAddPdf').addEventListener('click', () => { if (!S.pdf) { $('#filePdf').click(); return; } $('#filePdf2').click(); });
+$('#filePdf2').addEventListener('change', e => { const fs = [...e.target.files]; e.target.value = ''; (async () => { for (const f of fs) await openPdf(f, true); })(); });
 function renderStatus() {
   const p = S.pages[S.pageNum];
   $('#stScale').innerHTML = 'Escala: ' + (p && p.cal ? '<b>' + esc(p.calLabel) + '</b>' : '<b class="nocal">sin calibrar</b>');
@@ -1157,7 +1271,7 @@ $('#unitsSel').addEventListener('change', e => {
 function detailSheetRows() {
   const u = U();
   return detailRows().map(({ it, c, b, i }) => ({
-    '#': i, 'Página': it.page, 'Condición': c.name, 'Sistema': c.system, 'Material': c.material, 'Tamaño': sizeLabel(c), 'Tipo': typeName[it.type],
+    '#': i, 'Página': sheetName(it.page), 'Condición': c.name, 'Sistema': c.system, 'Material': c.material, 'Tamaño': sizeLabel(c), 'Tipo': typeName[it.type],
     'Cantidad': b.ok ? +b.q.toFixed(3) : null, 'Unidad': b.unit, 'Desperdicio %': c.waste || 0, 'Cant. c/desperdicio': b.ok ? +b.qw.toFixed(3) : null,
     'Piezas': b.pieces === '' ? null : b.pieces, ['Largo pieza (' + u.len + ')']: it.type === 'linear' && c.piece ? c.piece : null,
     ['Lámina (' + u.area + ')']: b.sheet === '' ? null : +b.sheet.toFixed(2), 'Calibre': b.gauge || null, ['Peso (' + u.wt + ')']: b.weight === '' ? null : Math.round(b.weight), 'Soportes': b.hangers === '' ? null : b.hangers,
@@ -1333,6 +1447,8 @@ let splitDrag = null;
 $('#split').addEventListener('mousedown', e => { splitDrag = { y: e.clientY, h: $('#bottom').offsetHeight }; e.preventDefault(); });
 window.addEventListener('mousemove', e => { if (!splitDrag) return; const h = Math.max(120, Math.min(window.innerHeight - 200, splitDrag.h - (e.clientY - splitDrag.y))); document.querySelector('main').style.setProperty('--bottomH', h + 'px'); });
 window.addEventListener('mouseup', () => { splitDrag = null; });
+$('#opacity').addEventListener('input', e => { $('#overlay').style.opacity = e.target.value / 100; });
+$('#btnSnap').addEventListener('click', () => S.pdf && toggleSnap());
 $('#zoomIn').addEventListener('click', () => setZoom(S.zoom * 1.25));
 $('#zoomOut').addEventListener('click', () => setZoom(S.zoom / 1.25));
 $('#zoomFit').addEventListener('click', () => S.pdf && fitZoom());
@@ -1418,7 +1534,12 @@ const UI_EN = {
   'Mostrar montos por sistema': 'Show amounts by system', 'Solo monto total': 'Lump sum only', 'General contractor': 'General contractor',
   'El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio.': 'The browser blocked the window. Allow pop-ups for this site.',
   'Lista de precios exportada. Llena precios y horas y vuelve a importarla.': 'Price list exported. Fill in prices and hours, then import it back.',
-  'No encontré materiales con el mismo nombre': 'No materials with matching names were found', 'Arrastra para cambiar el tamaño': 'Drag to resize'
+  'No encontré materiales con el mismo nombre': 'No materials with matching names were found',
+  'Hojas': 'Sheets', '+ PDF': '+ PDF', 'Agregar otro PDF al proyecto': 'Add another PDF to the project', 'Nombre de la hoja': 'Sheet name', 'Deducir': 'Deduct', 'Snap': 'Snap',
+  'Deducir un hueco de un área (D)': 'Deduct an opening from an area (D)', 'Ajustar a líneas del plano y a puntos de otras mediciones (S)': 'Snap to drawing lines and to points of other takeoffs (S)',
+  'Dibuja el hueco dentro de un área: clic en cada vértice, doble clic o Enter para restarlo': 'Draw the opening inside an area: click each corner, double-click or Enter to subtract it',
+  'Dibuja la deducción dentro de un área medida': 'Draw the deduction inside a measured area', 'Deducción restada del área': 'Deduction subtracted from the area',
+  'Snap activado': 'Snap on', 'Snap desactivado': 'Snap off', 'Marcas': 'Markups', 'Opacidad de las marcas': 'Markup opacity', 'Mostrar en el plano': 'Show on drawing', 'Ocultar en el plano': 'Hide on drawing', 'Arrastra para cambiar el tamaño': 'Drag to resize'
 };
 const UI_PATTERNS = [
   [/^(Lineal|Área|Conteo)( · .*)$/, (m, a, b) => UI_EN[a] + b],
@@ -1426,6 +1547,9 @@ const UI_PATTERNS = [
   [/^Actual: (.*)$/, (m, a) => 'Current: ' + trUI(a)],
   [/^([\d.,]+) pza$/, (m, a) => a + ' EA'],
   [/^\((\d+) sin escala\)$/, (m, a) => `(${a} not scaled)`],
+  [/^Falta abrir: (.*)\. Usa “\+ PDF”\.$/, (m, a) => `Still need to open: ${a}. Use “+ PDF”.`],
+  [/^Abre “(.*)” con “\+ PDF” para ver esta hoja$/, (m, a) => `Open “${a}” with “+ PDF” to see this sheet`],
+  [/^(.*) · p(\d+)( · sin escala)?$/, (m, a, b, c) => `${a} · p${b}${c ? ' · not scaled' : ''}`],
   [/^(\d+) medición\(es\)( · sin escala)?$/, (m, a, b) => `${a} takeoff(s)${b ? ' · not scaled' : ''}`],
   [/^(.*) · (\d+) página\(s\)$/, (m, a, b) => `${a} · ${b} sheet(s)`],
   [/^Escala (.+) aplicada( a todas las páginas)?$/, (m, a, b) => `Scale ${trUI(a)} applied${b ? ' to all sheets' : ''}`],

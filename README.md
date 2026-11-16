@@ -33,6 +33,12 @@ La interfaz está **en inglés** por defecto; cambia a español con el selector 
 - **Generar propuesta** abre una propuesta lista para imprimir o guardar como PDF, con alcance por sistema, inclusiones, exclusiones y firmas.
 - El Excel incluye la hoja **Estimate** con fórmulas vivas.
 
+## Hojas, snap, deducciones y filtros
+- **Varios PDF en un proyecto**: usa **+ PDF** en *Hojas*. Cada hoja toma su número del cuadro de rótulo (M-101, P-201…); doble clic para renombrarla.
+- **Snap (S)**: ajusta los clics a esquinas y líneas del plano y a los puntos de otras mediciones.
+- **Deducir (D)**: dibuja un hueco dentro de un área (shafts, columnas) y se resta solo.
+- **Filtros**: el punto junto a cada condición la muestra u oculta en el plano; el control *Marcas* cambia la opacidad.
+
 ## Condiciones
 Cada condición define sistema, material, tamaño, forma de ducto (ancho×alto o diámetro), largo de pieza, separación de soportes, % de desperdicio y precio unitario.
 Puedes editar la hoja *Condiciones* del Excel exportado y volver a cargarla con **Importar**.
