@@ -15,6 +15,10 @@ Abre `index.html` con Chrome o Edge (doble clic). No necesita internet ni instal
 5. Pestaña **Resumen / despiece**: piezas comerciales, lámina de ducto (ft²/m²), soportes y costo.
 6. **Exportar Excel** (hojas Resumen, Detalle, Condiciones, Info), **CSV** o **Copiar para Excel**.
 
+## Proyectos en EE. UU.
+Las condiciones de ejemplo usan términos de obra de EE. UU. (Supply/Return Duct, Copper Type L, PEX, Black Steel Sch 40, PVC DWV, Cast Iron No-Hub, VAV Box…).
+Los ductos calculan **calibre** automático (aprox. SMACNA baja presión) y **peso de lámina galvanizada en lb**. El Excel puede exportarse **en inglés** (LF, SF, EA) para contratistas.
+
 ## Condiciones
 Cada condición define sistema, material, tamaño, forma de ducto (ancho×alto o diámetro), largo de pieza, separación de soportes, % de desperdicio y precio unitario.
 Puedes editar la hoja *Condiciones* del Excel exportado y volver a cargarla con **Importar**.
