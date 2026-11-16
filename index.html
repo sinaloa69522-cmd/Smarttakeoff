@@ -66,6 +66,11 @@ aside h3{margin:0;padding:10px 10px 6px;font-size:11px;text-transform:uppercase;
 #pageList .sheet.missing{opacity:.55;border-style:dashed}
 main{display:grid;grid-template-rows:1fr 6px var(--bottomH,260px);grid-template-columns:minmax(0,1fr);min-height:0;min-width:0}
 #viewer{position:relative;overflow:auto;background:var(--viewer);min-height:0}
+#tradeSel{margin:0 10px 6px;width:calc(100% - 20px)}
+.trh{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:8px 6px 2px;font-weight:600}
+#pageList .sheet .disc{font-weight:500;font-size:10px;background:var(--hover);color:var(--muted);border-radius:8px;padding:0 5px;margin-left:5px}
+#findBar{position:sticky;top:0;left:0;z-index:5;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:6px 10px;background:var(--panel);border-bottom:2px solid #7048e8}
+#findBar label{display:flex;gap:4px;align-items:center}
 #cmpBar{position:sticky;top:0;left:0;z-index:5;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
 #cmpBar .lg{display:flex;align-items:center;gap:4px;color:var(--muted)}
 #cmpBar .lg i{width:12px;height:12px;border-radius:2px;display:inline-block}
@@ -144,6 +149,8 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
       <button class="tool" data-tool="count" title="Conteo (C)">Conteo<kbd>C</kbd></button>
       <button class="tool" data-tool="deduct" title="Deducir un hueco de un área (D)">Deducir<kbd>D</kbd></button>
       <select id="annoSel" title="Anotaciones de revisión"><option value="">Anotar…</option><option value="cloud">Nube (R)</option><option value="text">Texto (T)</option><option value="arrow">Flecha (W)</option><option value="callout">Callout (Q)</option><option value="highlight">Resaltar (H)</option><option value="stamp">Sello (M)</option><option value="photo">Foto (F)</option></select>
+      <button class="tool" data-tool="symbol" title="Buscar símbolo: encierra uno y encuentra todos los iguales (B)">Buscar símbolo<kbd>B</kbd></button>
+      <button id="btnDetect" title="Detectar etiquetas de equipos y accesorios en el plano y convertirlas en conteos">Detectar</button>
       <button id="btnSnap" class="on" title="Ajustar a líneas del plano y a puntos de otras mediciones (S)">Snap<kbd>S</kbd></button>
     </div>
     <div class="grp">
@@ -173,9 +180,10 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
   </header>
 
   <aside>
-    <h3>Condiciones <span><button id="btnImportCond" title="Importar condiciones desde Excel">Importar</button> <button id="btnNewCond" class="primary" title="Nueva condición">+ Nueva</button></span></h3>
+    <h3>Condiciones <span><button id="btnLib" title="Agregar condiciones de otros oficios">Biblioteca</button> <button id="btnImportCond" title="Importar condiciones desde Excel">Importar</button> <button id="btnNewCond" class="primary" title="Nueva condición">+ Nueva</button></span></h3>
     <input id="fileCond" type="file" accept=".xlsx,.xls,.csv" hidden>
     <input id="filePrice" type="file" accept=".xlsx,.xls,.csv" hidden>
+    <select id="tradeSel" title="Mostrar condiciones de"></select>
     <div id="condList"></div>
     <h3>Hojas <span><span id="pageInfo"></span> <button id="btnAddPdf" title="Agregar otro PDF al proyecto">+ PDF</button></span></h3>
     <input id="filePdf2" type="file" accept="application/pdf,.pdf" multiple hidden>
@@ -185,6 +193,7 @@ svg text{font-family:system-ui,sans-serif;paint-order:stroke;stroke:#fff;stroke-
   <main>
     <div id="viewer">
       <div id="cmpBar" hidden><span id="cmpTxt"></span><span class="lg"><i style="background:#e03131"></i>Solo en la versión actual</span><span class="lg"><i style="background:#1c7ed6"></i>Nuevo en la revisión</span><button id="cmpUse" class="primary">Usar la revisión en esta hoja</button><button id="cmpExit">Salir</button></div>
+      <div id="findBar" hidden><span id="findTxt"></span><label><input type="checkbox" id="findRot"> Incluir girados</label><select id="findSens"><option value="0.88">Estricta</option><option value="0.8" selected>Normal</option><option value="0.72">Flexible</option></select><button id="findAll">Buscar en todas las hojas</button><select id="findCond"></select><button id="findAdd" class="primary">Agregar conteos</button><button id="findExit">Cancelar</button></div>
       <div id="stage" hidden>
         <canvas id="pdfCanvas"></canvas>
         <svg id="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -258,6 +267,10 @@ const U = () => S.units === 'imperial'
 
 /* ---------- Conditions (takeoff items) ---------- */
 function presetConditions() {
+  const base = mechPlumbPresets(); base.forEach(c => { c.trade = guessTrade(c); c.ht = 0; c.th = 0; c.tags = PRESET_TAGS[c.name] || []; });
+  return [...base, ...tradePresets().map(applyDefaultLabor)];
+}
+function mechPlumbPresets() {
   // Typical US mechanical / plumbing takeoff items (names in US trade terms)
   const imp = S.units === 'imperial';
   const L = ft => imp ? ft : +(ft * 0.3048).toFixed(2);
@@ -296,8 +309,8 @@ const LABOR_ASM = [[/^Elbow .*copper/i, 0.25], [/^Elbow .*Sch 40/i, 0.75], [/^El
   [/^Coupling .*copper/i, 0.2], [/^Coupling .*Sch 40/i, 0.6], [/^Coupling .*PVC/i, 0.25], [/^No-hub coupling/i, 0.3], [/^Clevis hanger/i, 0.3], [/^Pipe insulation/i, 0.05], [/^Hanger strap/i, 0.15],
   [/^Duct wrap/i, 0.03], [/^Flex duct 8/i, 0.08], [/^Spin-in collar/i, 0.3], [/^PEX (crimp|clip)/i, 0.05], [/^Flex duct clamp/i, 0.05], [/^Flex duct strap/i, 0.1]];
 function applyDefaultLabor(c) {
-  c.labor = LABOR_MAIN[c.name] || 0;
-  (c.asm || []).forEach(a => { const m = LABOR_ASM.find(([re]) => re.test(a.name)); a.lab = m ? m[1] : 0; });
+  if (c.labor == null) c.labor = LABOR_MAIN[c.name] || 0;
+  (c.asm || []).forEach(a => { if (a.lab != null) return; const m = LABOR_ASM.find(([re]) => re.test(a.name)); a.lab = m ? m[1] : 0; });
   return c;
 }
 // Galvanized sheet weight, lb/ft² (incl. zinc coating)
@@ -358,7 +371,11 @@ function breakdown(it) {
       o.weight = S.units === 'imperial' ? lb : lb * 0.45359;
     }
   }
-  const basis = { qty: r.ok ? qw : 0, sheet: +o.sheet || 0, hanger: +o.hangers || 0, el90, el45, elbow: el90 + el45, piece: +o.pieces || 0, drop: drops };
+  const sz = U().sizeToBase, ht = +c.ht || 0, th = +c.th || 0;
+  o.wall = it.type === 'linear' && r.ok && ht > 0 ? qw * ht : 0;
+  const v0 = r.ok && th > 0 ? (it.type === 'area' ? qw * th * sz : it.type === 'linear' && ht > 0 ? qw * ht * th * sz : 0) : 0;
+  o.vol = S.units === 'imperial' ? v0 / 27 : v0;
+  const basis = { wall: o.wall, vol: o.vol, perim: it.type === 'area' && r.ok ? r.per || 0 : 0, qty: r.ok ? qw : 0, sheet: +o.sheet || 0, hanger: +o.hangers || 0, el90, el45, elbow: el90 + el45, piece: +o.pieces || 0, drop: drops };
   o.asm = (c.asm || []).map(a => { const q = (+a.f || 0) * (basis[a.base] || 0); return { name: a.name, unit: a.unit, price: +a.price || 0, q, cost: q * (+a.price || 0), hours: q * (+a.lab || 0) }; }).filter(a => a.q > 0);
   o.cost = o.mainCost + o.asm.reduce((s, a) => s + a.cost, 0);
   o.mainHours = r.ok ? r.q * (+c.labor || 0) : 0;
@@ -376,7 +393,7 @@ function turns(pts) {
   }
   return { el90, el45 };
 }
-const ASM_BASES = [['qty', 'por unidad medida (LF/SF/EA)'], ['sheet', 'por unidad de lámina (ft²)'], ['hanger', 'por soporte'], ['el90', 'por codo 90°'], ['el45', 'por codo 45°'], ['elbow', 'por codo (cualquiera)'], ['piece', 'por tramo/pieza'], ['drop', 'por drop/riser']];
+const ASM_BASES = [['qty', 'por unidad medida (LF/SF/EA)'], ['sheet', 'por unidad de lámina (ft²)'], ['hanger', 'por soporte'], ['el90', 'por codo 90°'], ['el45', 'por codo 45°'], ['elbow', 'por codo (cualquiera)'], ['piece', 'por tramo/pieza'], ['drop', 'por drop/riser'], ['wall', 'por área de muro (largo × altura)'], ['vol', 'por volumen (yd³ / m³)'], ['perim', 'por perímetro del área']];
 const isMeasure = it => it.type === 'linear' || it.type === 'area' || it.type === 'count';
 
 /* ---------- Formatting ---------- */
@@ -450,7 +467,7 @@ function pushUndo() { S.undo.push(snapshot()); if (S.undo.length > 100) S.undo.s
 function restore(json) { const o = JSON.parse(json); S.items = o.items; S.pages = o.pages; S.conditions = o.conditions; S.selected = null; S.openCount = null; refresh(); }
 function undo() { if (!S.undo.length) return; S.redo.push(snapshot()); restore(S.undo.pop()); }
 function redo() { if (!S.redo.length) return; S.undo.push(snapshot()); restore(S.redo.pop()); }
-function projectData() { return { app: 'SmartTakeoff', version: 1, fileName: S.fileName, units: S.units, pages: S.pages, items: S.items, conditions: S.conditions, est: S.est, sheets: S.sheets.map(({ doc, page, name, auto }) => ({ doc, page, name, auto })) }; }
+function projectData() { return { app: 'SmartTakeoff', version: 1, fileName: S.fileName, units: S.units, pages: S.pages, items: S.items, conditions: S.conditions, est: S.est, sheets: S.sheets.map(({ doc, page, name, auto, disc }) => ({ doc, page, name, auto, disc })) }; }
 function defaultEst() {
   let co = {}; try { co = JSON.parse(localStorage.getItem('smarttakeoff:company') || '{}'); } catch (e) { }
   return { rate: 95, tax: 8.25, oh: 10, profit: 10, company: co.company || '', contact: co.contact || '', client: '', project: '', address: '', bidDate: '', estimator: co.estimator || '',
@@ -467,6 +484,7 @@ let fileT;
 function loadProjectData(o) {
   if (!o || !Array.isArray(o.items)) throw new Error('Archivo de proyecto no válido');
   S.units = o.units || 'imperial'; S.pages = o.pages || {}; S.items = o.items; S.conditions = o.conditions || []; S.est = Object.assign(defaultEst(), o.est || {}); S.sheets = Array.isArray(o.sheets) ? o.sheets : [];
+  S.conditions.forEach(c => { if (c.trade == null) c.trade = guessTrade(c); });
   S.activeCond = S.conditions[0] ? S.conditions[0].id : null;
   $('#unitsSel').value = S.units;
 }
@@ -475,9 +493,10 @@ function loadProjectData(o) {
 const sheetName = n => { const sh = S.sheets[n - 1]; return sh ? sh.name : String(n); };
 function buildSheets(doc, count) { return Array.from({ length: count }, (_, i) => ({ doc, page: i + 1, name: `${doc.replace(/\.pdf$/i, '')} p${i + 1}`, auto: true })); }
 // Look for a sheet number like M-101, P2.01 or H-3 in the title block (lower-right text wins)
-async function detectSheetName(pdf, pageNo) {
+async function detectSheet(pdf, pageNo) {
   try {
     const page = await pdf.getPage(pageNo); const vp = page.getViewport({ scale: 1 }); const tc = await page.getTextContent();
+    const text = tc.items.map(i => i.str || '').join(' ').toUpperCase();
     const re = /^[A-Z]{1,3}[-.]?\d{1,3}(\.\d{1,3})?[A-Z]?$/;
     let best = null, score = -Infinity;
     tc.items.forEach(it => {
@@ -485,8 +504,8 @@ async function detectSheetName(pdf, pageNo) {
       const sc = it.transform[4] / vp.width - it.transform[5] / vp.height + Math.abs(it.transform[0] || 0) / 40;
       if (sc > score) { score = sc; best = t; }
     });
-    return best;
-  } catch (e) { return null; }
+    return { name: best, disc: discFromName(best) || discFromText(text) || '' };
+  } catch (e) { return { name: null, disc: '' }; }
 }
 async function openPdf(file, append) {
   try {
@@ -507,7 +526,7 @@ async function openPdf(file, append) {
     if (!S.sheets.some(sh => sh.doc === file.name)) S.sheets.push(...buildSheets(file.name, pdf.numPages));
     S.pdfs[file.name] = pdf; S.pdfBytes[file.name] = bytes; S.pdf = pdf; S.numPages = S.sheets.length;
     // name sheets from their title blocks (only ones the user has not renamed)
-    for (const sh of S.sheets.filter(x => x.doc === file.name && x.auto)) { const nm = await detectSheetName(pdf, sh.page); if (nm) sh.name = nm; }
+    for (const sh of S.sheets.filter(x => x.doc === file.name && (x.auto || x.disc == null))) { const r = await detectSheet(pdf, sh.page); if (sh.auto && r.name) sh.name = r.name; if (sh.disc == null) sh.disc = r.disc; }
     $('#empty').hidden = true; $('#stage').hidden = false;
     document.title = (S.fileName || file.name) + ' · SmartTakeoff';
     const first = S.sheets.findIndex(sh => sh.doc === file.name) + 1;
@@ -661,6 +680,7 @@ function drawOverlay() {
     const col = !['linear', 'area'].includes(d.type) ? '#e03131' : (c ? c.color : '#e03131');
     const P = pts.map(p => p.join(',')).join(' ');
     if (d.type === 'area' || d.type === 'deduct') h += `<polygon points="${P}" fill="${col}" fill-opacity=".15" stroke="${col}" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
+    else if (d.type === 'symbol') { const [a, b] = pts; h += `<rect x="${Math.min(a[0], b[0])}" y="${Math.min(a[1], b[1])}" width="${Math.abs(b[0] - a[0])}" height="${Math.abs(b[1] - a[1])}" fill="#7048e8" fill-opacity=".08" stroke="#7048e8" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`; }
     else if (d.type === 'highlight') { const [a, b] = pts; h += `<rect x="${Math.min(a[0], b[0])}" y="${Math.min(a[1], b[1])}" width="${Math.abs(b[0] - a[0])}" height="${Math.abs(b[1] - a[1])}" fill="#fab005" fill-opacity=".25" stroke="#e67700" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`; }
     else if (d.type === 'cloud') h += `<path d="${cloudPath(pts[0], pts[1])}" fill="none" stroke="${col}" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
     else h += `<polyline points="${P}" fill="none" stroke="${col}" stroke-width="2.5" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
@@ -672,6 +692,7 @@ function drawOverlay() {
       : S.snapHit.kind === 'pt' ? `<rect x="${x - q}" y="${y - q}" width="${q * 2}" height="${q * 2}" fill="none" stroke="#12b886" stroke-width="2" vector-effect="non-scaling-stroke"/>`
       : `<path d="M${x - q},${y - q}L${x + q},${y + q}M${x - q},${y + q}L${x + q},${y - q}" stroke="#12b886" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
   }
+  h += findOverlay();
   $('#overlay').innerHTML = h;
 }
 
@@ -689,17 +710,22 @@ const hints = {
   callout: 'Clic en el punto a señalar y luego donde va el texto',
   highlight: 'Clic en dos esquinas opuestas del área a resaltar',
   stamp: 'Clic donde va el sello',
-  photo: 'Clic donde va la foto y elige la imagen'
+  photo: 'Clic donde va la foto y elige la imagen',
+  symbol: 'Dibuja un recuadro alrededor de un símbolo (clic en dos esquinas) para encontrar todos los iguales'
 };
-const TOOL_LABEL = { select: 'Seleccionar', calibrate: 'Calibrar', linear: 'Lineal', area: 'Área', count: 'Conteo', deduct: 'Deducir', cloud: 'Nube', text: 'Texto', arrow: 'Flecha', callout: 'Callout', highlight: 'Resaltar', stamp: 'Sello', photo: 'Foto' };
+const TOOL_LABEL = { select: 'Seleccionar', calibrate: 'Calibrar', linear: 'Lineal', area: 'Área', count: 'Conteo', deduct: 'Deducir', cloud: 'Nube', text: 'Texto', arrow: 'Flecha', callout: 'Callout', highlight: 'Resaltar', stamp: 'Sello', photo: 'Foto', symbol: 'Buscar símbolo' };
 const ANNO_TOOLS = ['cloud', 'text', 'arrow', 'callout', 'highlight', 'stamp', 'photo'];
 const STAMPS = { approved: ['APPROVED', '#2b8a3e'], reviewed: ['REVIEWED', '#1971c2'], revise: ['REVISE & RESUBMIT', '#e8590c'], rejected: ['REJECTED', '#c92a2a'], field: ['FIELD VERIFY', '#5f3dc4'], nic: ['NOT IN CONTRACT', '#495057'] };
+function toolStatus() {
+  const t = S.tool, c = condById(S.activeCond);
+  $('#stTool').innerHTML = 'Herramienta: <b>' + esc(TOOL_LABEL[t] || t) + '</b>' + (['linear', 'area', 'count'].includes(t) && c ? ' · ' + esc(c.name) : '');
+}
 function setTool(t) {
   finishDraft(); S.openCount = null;
   if (['linear', 'area', 'count'].includes(t)) {
     const c = condById(S.activeCond);
     if (!c || c.type !== t) {
-      const m = S.conditions.find(x => x.type === t);
+      const m = visibleConds().find(x => x.type === t) || S.conditions.find(x => x.type === t);
       if (m) S.activeCond = m.id;
       else { editCondition(null, t); return; }
     }
@@ -708,7 +734,7 @@ function setTool(t) {
   document.querySelectorAll('.tool').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
   $('#overlay').style.cursor = t === 'select' ? 'grab' : 'crosshair';
   $('#annoSel').value = ANNO_TOOLS.includes(t) ? t : '';
-  $('#stTool').innerHTML = 'Herramienta: <b>' + esc(TOOL_LABEL[t] || t) + '</b>' + (['linear', 'area', 'count'].includes(t) ? ' · ' + esc(condById(S.activeCond).name) : '');
+  toolStatus();
   $('#stHint').textContent = hints[t] || '';
   renderConditions();
   drawOverlay();
@@ -812,6 +838,8 @@ window.addEventListener('mouseup', () => {
   if (drag) { drag = null; refresh(); }
 });
 ov.addEventListener('click', e => {
+  const fd = e.target.closest && e.target.closest('[data-found]');
+  if (fd && S.find && !S.draft) { const a = S.find.pts[S.pageNum]; a.splice(+fd.dataset.found, 1); if (!a.length) delete S.find.pts[S.pageNum]; showFindBar(); drawOverlay(); return; }
   if (!S.pdf || S.tool === 'select' || e.button !== 0 || spaceDown) return;
   let p = (S.snapHit && S.cursor) ? S.cursor : evtPt(e);
   const t = S.tool;
@@ -824,7 +852,7 @@ ov.addEventListener('click', e => {
   const d = S.draft;
   if (d.points.length && e.shiftKey && t !== 'cloud') p = ortho(p, d.points[d.points.length - 1]);
   d.points.push(p);
-  if (['calibrate', 'cloud', 'arrow', 'highlight', 'callout'].includes(t) && d.points.length === 2) finishDraft();
+  if (['calibrate', 'cloud', 'arrow', 'highlight', 'callout', 'symbol'].includes(t) && d.points.length === 2) finishDraft();
   drawOverlay();
 });
 ov.addEventListener('mouseleave', () => { S.cursor = null; drawOverlay(); });
@@ -856,6 +884,7 @@ function finishDraft() {
   const d = S.draft; S.draft = null; $('#stLive').textContent = '';
   if (!d) return;
   if (d.type === 'calibrate') { if (d.points.length === 2) calibrateDialog(dist(d.points[0], d.points[1])); return; }
+  if (d.type === 'symbol') { if (d.points.length === 2) { S.find = null; symbolSearch(d.points, 'page'); } drawOverlay(); return; }
   const min = d.type === 'area' || d.type === 'deduct' ? 3 : 2;
   if (d.points.length < min) { drawOverlay(); return; }
   if (d.type === 'deduct') {
@@ -968,7 +997,7 @@ window.addEventListener('keydown', e => {
   if (e.key === '+' || e.key === '=') { setZoom(S.zoom * 1.25); return; }
   if (e.key === '-') { setZoom(S.zoom / 1.25); return; }
   if (k === 's' && S.pdf) { toggleSnap(); return; }
-  const map = { v: 'select', k: 'calibrate', l: 'linear', a: 'area', c: 'count', r: 'cloud', t: 'text', d: 'deduct', w: 'arrow', q: 'callout', h: 'highlight', m: 'stamp', f: 'photo' };
+  const map = { b: 'symbol', v: 'select', k: 'calibrate', l: 'linear', a: 'area', c: 'count', r: 'cloud', t: 'text', d: 'deduct', w: 'arrow', q: 'callout', h: 'highlight', m: 'stamp', f: 'photo' };
   if (map[k] && S.pdf) setTool(map[k]);
 });
 window.addEventListener('keyup', e => { if (e.key === ' ') { spaceDown = false; ov.style.cursor = S.tool === 'select' ? 'grab' : 'crosshair'; } });
@@ -980,11 +1009,20 @@ function condTotals() {
   return t;
 }
 function renderConditions() {
+  renderTradeSel();
   const t = condTotals();
-  $('#condList').innerHTML = S.conditions.map(c => {
+  const list = visibleConds();
+  if (list.length && !list.some(c => c.id === S.activeCond)) { const m = list.find(c => c.type === S.tool) || list[0]; S.activeCond = m.id; S.openCount = null; toolStatus(); }
+  const order = c => { const i = TRADES.findIndex(x => x.id === c.trade); return i < 0 ? 99 : i; };
+  const sorted = list.map((c, i) => [c, i]).sort((a, b) => order(a[0]) - order(b[0]) || a[1] - b[1]).map(x => x[0]);
+  const multi = new Set(sorted.map(c => c.trade || '')).size > 1;
+  let last = null;
+  $('#condList').innerHTML = sorted.map(c => {
     const q = t[c.id] || 0;
     const qs = c.type === 'count' ? q + ' pza' : c.type === 'linear' ? fmtLen(q) : nf(q) + ' ' + U().area;
-    return `<div class="cond ${c.id === S.activeCond ? 'active' : ''} ${c.hidden ? 'hid' : ''}" data-cid="${c.id}">
+    const hd = multi && (c.trade || '') !== last ? `<div class="trh">${esc(tradeName(c.trade) || 'Otras')}</div>` : '';
+    last = c.trade || '';
+    return hd + `<div class="cond ${c.id === S.activeCond ? 'active' : ''} ${c.hidden ? 'hid' : ''}" data-cid="${c.id}">
       <span class="sw" style="background:${esc(c.color)}"></span>
       <span class="nm"><b>${esc(c.name)}</b><small>${typeName[c.type]}${c.system ? ' · ' + esc(c.system) : ''}</small></span>
       <span class="q">${q ? esc(qs) : ''}</span>
@@ -1008,6 +1046,7 @@ $('#btnNewCond').addEventListener('click', () => editCondition(null));
 function editCondition(id, forceType) {
   const isNew = !id;
   const c = isNew ? { id: newId('c'), name: '', type: forceType || 'linear', color: '#d9480f', system: '', material: '', size: '', shape: 'none', w: 0, h: 0, d: 0, gauge: 'auto', piece: 0, hanger: 0, waste: 0, price: 0 } : { ...condById(id) };
+  if (isNew) Object.assign(c, { trade: S.tradeFilter && !['auto', 'all'].includes(S.tradeFilter) ? S.tradeFilter : ((activeTrades() || [])[0] || ''), ht: 0, th: 0, tags: [] });
   const u = U();
   const used = !isNew && S.items.some(i => i.cond === id);
   modal(`<h3>${isNew ? 'Nueva condición' : 'Editar condición'}</h3>
@@ -1015,6 +1054,7 @@ function editCondition(id, forceType) {
   <div class="form">
     <label>Nombre</label><input type="text" id="fName" value="${esc(c.name)}" placeholder="Ej.: Ducto 18x10 suministro" autofocus>
     <label>Tipo</label><select id="fType" ${used ? 'disabled' : ''}><option value="linear">Lineal</option><option value="area">Área</option><option value="count">Conteo</option></select>
+    <label>Oficio</label><select id="fTrade"><option value="">(sin oficio)</option>${TRADES.map(t => `<option value="${t.id}">${esc(t.es)}</option>`).join('')}</select>
     <label>Color</label><input type="color" id="fColor" value="${esc(c.color)}" style="height:30px;padding:2px">
     <label>Sistema</label><input type="text" id="fSystem" value="${esc(c.system)}" placeholder="HVAC suministro, Agua fría…">
     <label>Material</label><input type="text" id="fMat" value="${esc(c.material)}" placeholder="Lámina galv. cal. 24, Cobre tipo L…">
@@ -1026,6 +1066,11 @@ function editCondition(id, forceType) {
     <label class="lin">Largo de pieza (${u.len})</label><input class="lin" type="number" id="fPiece" value="${c.piece}" step="any">
     <div class="hint lin">Tramo comercial: ducto 5 ft / 1.5 m, tubería 20–21 ft / 6 m. Deja 0 para no calcular piezas.</div>
     <label class="lin">Soporte cada (${u.len})</label><input class="lin" type="number" id="fHanger" value="${c.hanger}" step="any">
+    <label class="lin">Altura de muro (${u.len})</label><input class="lin" type="number" id="fHt" value="${+c.ht || 0}" step="any">
+    <label class="thk">Espesor (${u.size})</label><input class="thk" type="number" id="fTh" value="${+c.th || 0}" step="any">
+    <div class="hint thk">Con altura, el largo × altura da el área de muro. Con espesor, sale el volumen de concreto.</div>
+    <label class="cnt">Etiquetas en plano</label><input class="cnt" type="text" id="fTags" value="${esc((c.tags || []).join(', '))}" placeholder="VAV, RTU, WC… (separadas por coma)">
+    <div class="hint cnt">Etiquetas de texto que “Detectar” convierte en conteos de esta condición.</div>
     <label>Desperdicio (%)</label><input type="number" id="fWaste" value="${c.waste}" step="any">
     <label>Precio unitario</label><input type="number" id="fPrice" value="${c.price}" step="any">
     <div class="hint">Precio por ${c.type === 'count' ? 'pieza' : c.type === 'area' ? u.area : u.len}, se multiplica por la cantidad con desperdicio.</div>
@@ -1048,7 +1093,7 @@ function editCondition(id, forceType) {
       const name = $('#fName').value.trim();
       if (!name) { toast('Ponle un nombre a la condición'); return false; }
       pushUndo();
-      Object.assign(c, { name, type: $('#fType').value, color: $('#fColor').value, system: $('#fSystem').value.trim(), material: $('#fMat').value.trim(), size: $('#fSize').value.trim(), shape: $('#fShape').value, w: +$('#fW').value || 0, h: +$('#fH').value || 0, d: +$('#fD').value || 0, gauge: $('#fGauge').value, asm: readAsm(), piece: +$('#fPiece').value || 0, hanger: +$('#fHanger').value || 0, waste: +$('#fWaste').value || 0, price: +$('#fPrice').value || 0, labor: +$('#fLabor').value || 0 });
+      Object.assign(c, { name, type: $('#fType').value, color: $('#fColor').value, system: $('#fSystem').value.trim(), material: $('#fMat').value.trim(), size: $('#fSize').value.trim(), shape: $('#fShape').value, w: +$('#fW').value || 0, h: +$('#fH').value || 0, d: +$('#fD').value || 0, gauge: $('#fGauge').value, asm: readAsm(), piece: +$('#fPiece').value || 0, hanger: +$('#fHanger').value || 0, waste: +$('#fWaste').value || 0, price: +$('#fPrice').value || 0, labor: +$('#fLabor').value || 0, trade: $('#fTrade').value, ht: +$('#fHt').value || 0, th: +$('#fTh').value || 0, tags: $('#fTags').value.split(',').map(x => x.trim().toUpperCase()).filter(Boolean) });
       if (c.type !== 'linear') c.shape = 'none';
       if (isNew) S.conditions.push(c); else S.conditions[S.conditions.findIndex(x => x.id === id)] = c;
       S.activeCond = c.id;
@@ -1056,12 +1101,15 @@ function editCondition(id, forceType) {
       if (forceType && S.pdf) setTool(forceType);
     } }
   ]);
-  $('#fType').value = c.type; $('#fShape').value = c.shape; $('#fGauge').value = String(c.gauge || 'auto');
+  $('#fType').value = c.type; $('#fTrade').value = c.trade || ''; $('#fShape').value = c.shape; $('#fGauge').value = String(c.gauge || 'auto');
   const sync = () => {
     const lin = $('#fType').value === 'linear', sh = $('#fShape').value;
     document.querySelectorAll('#modal .lin').forEach(e => e.style.display = lin ? '' : 'none');
     document.querySelectorAll('#modal .rect').forEach(e => e.style.display = lin && sh === 'rect' ? '' : 'none');
     document.querySelectorAll('#modal .duct').forEach(e => e.style.display = lin && sh !== 'none' ? '' : 'none');
+    const ty = $('#fType').value;
+    document.querySelectorAll('#modal .thk').forEach(e => e.style.display = ty !== 'count' ? '' : 'none');
+    document.querySelectorAll('#modal .cnt').forEach(e => e.style.display = ty === 'count' ? '' : 'none');
     document.querySelectorAll('#modal .round').forEach(e => e.style.display = lin && sh === 'round' ? '' : 'none');
   };
   $('#fType').addEventListener('change', sync); $('#fShape').addEventListener('change', sync); sync();
@@ -1306,7 +1354,7 @@ function renderPages() {
   let h = '';
   for (let n = 1; n <= S.numPages; n++) {
     const sh = S.sheets[n - 1] || {}; const k = pc(n);
-    h += `<button data-page="${n}" class="sheet ${n === S.pageNum ? 'on' : ''} ${S.pdfs[sh.doc] ? '' : 'missing'}" title="${k} medición(es)${cal(n) ? '' : ' · sin escala'}"><b>${esc(sh.name || n)}</b><small>${esc((sh.doc || '').replace(/\.pdf$/i, ''))} · p${sh.page || n}${cal(n) ? '' : ' · sin escala'}</small>${k ? `<span class="cnt">${k}</span>` : ''}</button>`;
+    h += `<button data-page="${n}" class="sheet ${n === S.pageNum ? 'on' : ''} ${S.pdfs[sh.doc] ? '' : 'missing'}" title="${k} medición(es)${cal(n) ? '' : ' · sin escala'}"><b>${esc(sh.name || n)}${sh.disc && DISC_LABEL[sh.disc] ? `<span class="disc">${esc(DISC_LABEL[sh.disc])}</span>` : ''}</b><small>${esc((sh.doc || '').replace(/\.pdf$/i, ''))} · p${sh.page || n}${cal(n) ? '' : ' · sin escala'}</small>${k ? `<span class="cnt">${k}</span>` : ''}</button>`;
   }
   $('#pageList').innerHTML = h;
   $('#pageInfo').textContent = S.numPages ? `${S.pageNum} / ${S.numPages}` : '';
@@ -1314,7 +1362,7 @@ function renderPages() {
 $('#pageList').addEventListener('click', e => { const b = e.target.closest('[data-page]'); if (b) gotoPage(+b.dataset.page); });
 $('#pageList').addEventListener('dblclick', e => {
   const b = e.target.closest('[data-page]'); if (!b) return; const sh = S.sheets[+b.dataset.page - 1]; if (!sh) return;
-  modal(`<h3>Nombre de la hoja</h3><div class="form"><label>Nombre</label><input type="text" id="shName" value="${esc(sh.name)}" autofocus></div>`, [{ t: 'Cancelar' }, { t: 'Guardar', primary: true, f: () => { const v = $('#shName').value.trim(); if (v) { sh.name = v; sh.auto = false; refresh(); } } }]);
+  modal(`<h3>Nombre de la hoja</h3><div class="form"><label>Nombre</label><input type="text" id="shName" value="${esc(sh.name)}" autofocus><label>Disciplina</label><select id="shDisc"><option value="">(sin detectar)</option>${Object.entries(DISC_LABEL).map(([k, v]) => `<option value="${k}" ${sh.disc === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>`, [{ t: 'Cancelar' }, { t: 'Guardar', primary: true, f: () => { const v = $('#shName').value.trim(); if (v) { if (v !== sh.name) sh.auto = false; sh.name = v; } sh.disc = $('#shDisc').value; refresh(); } }]);
 });
 $('#btnAddPdf').addEventListener('click', () => { if (!S.pdf) { $('#filePdf').click(); return; } $('#filePdf2').click(); });
 $('#filePdf2').addEventListener('change', e => { const fs = [...e.target.files]; e.target.value = ''; (async () => { for (const f of fs) await openPdf(f, true); })(); });
@@ -1334,6 +1382,7 @@ $('#unitsSel').addEventListener('change', e => {
   S.items.forEach(it => { if (it.vert) it.vert = +(it.vert * f).toFixed(3); });
   S.conditions.forEach(c => {
     c.piece = +(c.piece * f).toFixed(3); c.hanger = +(c.hanger * f).toFixed(3);
+    c.ht = +((+c.ht || 0) * f).toFixed(3); c.th = +((+c.th || 0) * fs).toFixed(2);
     c.w = +(c.w * fs).toFixed(2); c.h = +(c.h * fs).toFixed(2); c.d = +(c.d * fs).toFixed(2);
     if (c.price) c.price = +(c.price / (c.type === 'area' ? f * f : c.type === 'linear' ? f : 1)).toFixed(4);
   });
@@ -1345,7 +1394,7 @@ $('#unitsSel').addEventListener('change', e => {
 function detailSheetRows() {
   const u = U();
   return detailRows().map(({ it, c, b, i }) => ({
-    '#': i, 'Página': sheetName(it.page), 'Condición': c.name, 'Sistema': c.system, 'Material': c.material, 'Tamaño': sizeLabel(c), 'Tipo': typeName[it.type],
+    '#': i, 'Página': sheetName(it.page), 'Condición': c.name, 'Oficio': tradeName(c.trade), 'Sistema': c.system, 'Material': c.material, 'Tamaño': sizeLabel(c), 'Tipo': typeName[it.type],
     'Cantidad': b.ok ? +b.q.toFixed(3) : null, 'Unidad': b.unit, 'Desperdicio %': c.waste || 0, 'Cant. c/desperdicio': b.ok ? +b.qw.toFixed(3) : null,
     'Piezas': b.pieces === '' ? null : b.pieces, ['Largo pieza (' + u.len + ')']: it.type === 'linear' && c.piece ? c.piece : null,
     ['Lámina (' + u.area + ')']: b.sheet === '' ? null : +b.sheet.toFixed(2), 'Calibre': b.gauge || null, ['Peso (' + u.wt + ')']: b.weight === '' ? null : Math.round(b.weight), 'Soportes': b.hangers === '' ? null : b.hangers,
@@ -1356,7 +1405,7 @@ function detailSheetRows() {
 function summarySheetRows() {
   const u = U();
   return summaryRows().map(r => ({
-    'Condición': r.c.name, 'Sistema': r.c.system, 'Material': r.c.material, 'Tamaño': sizeLabel(r.c), 'Tipo': typeName[r.c.type], 'Mediciones': r.n,
+    'Condición': r.c.name, 'Oficio': tradeName(r.c.trade), 'Sistema': r.c.system, 'Material': r.c.material, 'Tamaño': sizeLabel(r.c), 'Tipo': typeName[r.c.type], 'Mediciones': r.n,
     'Cantidad': +r.q.toFixed(3), 'Unidad': unitOf(r.c), 'Desperdicio %': r.c.waste || 0, 'Cant. c/desperdicio': +r.qw.toFixed(3),
     'Piezas': r.c.type === 'linear' && r.c.piece ? r.pieces : null, ['Largo pieza (' + u.len + ')']: r.c.type === 'linear' && r.c.piece ? r.c.piece : null,
     ['Lámina (' + u.area + ')']: r.sheet ? +r.sheet.toFixed(2) : null, 'Calibre': gaugeOf(r.c) || null, ['Peso (' + u.wt + ')']: r.weight ? Math.round(r.weight) : null, 'Soportes': r.hangers || null, 'Codos 90°': r.c.type === 'linear' ? r.el90 : null, 'Codos 45°': r.c.type === 'linear' ? r.el45 : null, 'Precio unit.': r.c.price || null, 'Costo': r.cost ? +r.cost.toFixed(2) : null, 'Horas MO': r.hours ? +r.hours.toFixed(2) : null,
@@ -1366,7 +1415,7 @@ function summarySheetRows() {
 function conditionSheetRows() {
   const u = U();
   return S.conditions.map(c => ({
-    'Nombre': c.name, 'Tipo': typeName[c.type], 'Color': c.color, 'Sistema': c.system, 'Material': c.material, 'Tamaño': c.size,
+    'Nombre': c.name, 'Oficio': tradeName(c.trade), 'Tipo': typeName[c.type], 'Color': c.color, 'Sistema': c.system, 'Material': c.material, 'Tamaño': c.size,
     'Forma': c.shape === 'rect' ? 'Rectangular' : c.shape === 'round' ? 'Redondo' : '', ['Ancho (' + u.size + ')']: c.w || null, ['Alto (' + u.size + ')']: c.h || null, ['Diámetro (' + u.size + ')']: c.d || null, 'Calibre': c.shape === 'none' ? null : (c.gauge === 'auto' || !c.gauge ? 'auto' : +c.gauge),
     ['Largo pieza (' + u.len + ')']: c.piece || null, ['Soporte cada (' + u.len + ')']: c.hanger || null, 'Desperdicio %': c.waste || 0, 'Precio unit.': c.price || null, 'Horas MO (h/u)': c.labor || null
   }));
@@ -1586,7 +1635,7 @@ async function compareRevision(file) {
     const pdf = await pdfjs.getDocument({ data: buf }).promise;
     // match the sheet by its number in the title block, else by page position
     let pg = 0;
-    for (let i = 1; i <= pdf.numPages && !pg; i++) { const nm = await detectSheetName(pdf, i); if (nm && sh && nm === sh.name) pg = i; }
+    for (let i = 1; i <= pdf.numPages && !pg; i++) { const nm = (await detectSheet(pdf, i)).name; if (nm && sh && nm === sh.name) pg = i; }
     if (!pg) pg = sh && sh.page <= pdf.numPages ? sh.page : 1;
     const np = await pdf.getPage(pg);
     const cv = $('#pdfCanvas'), W = cv.width, H = cv.height, ctx = cv.getContext('2d');
@@ -1858,6 +1907,542 @@ function setUiLang(l) {
   try { localStorage.setItem('smarttakeoff:ui', l); } catch (e) { }
   trNode(document.body);
 }
+
+/* ---------- Trades, sheet disciplines & auto-detection ---------- */
+const TRADES = [
+  { id: 'mech', es: 'HVAC / Mecánico', en: 'HVAC / Mechanical', pal: ['#e8590c', '#1971c2', '#5c940d', '#9c36b5', '#0c8599'] },
+  { id: 'plumb', es: 'Plomería', en: 'Plumbing', pal: ['#2b8a3e', '#c2255c', '#495057', '#5f3dc4', '#e64980'] },
+  { id: 'fire', es: 'Protección contra incendios', en: 'Fire Protection', pal: ['#c92a2a', '#e03131', '#a61e4d', '#f03e3e'] },
+  { id: 'elec', es: 'Eléctrico', en: 'Electrical', pal: ['#f59f00', '#e67700', '#fab005', '#d9480f', '#862e9c'] },
+  { id: 'lowv', es: 'Bajo voltaje / Alarma', en: 'Low Voltage / Fire Alarm', pal: ['#1098ad', '#0b7285', '#3bc9db', '#c92a2a'] },
+  { id: 'drywall', es: 'Muros y drywall', en: 'Drywall & Framing', pal: ['#868e96', '#495057', '#5c7cfa', '#7048e8'] },
+  { id: 'finish', es: 'Acabados (pisos, plafones, pintura)', en: 'Finishes (floors, ceilings, paint)', pal: ['#748ffc', '#20c997', '#f783ac', '#94d82d', '#ff922b'] },
+  { id: 'doors', es: 'Puertas y ventanas', en: 'Doors & Windows', pal: ['#7950f2', '#ae3ec9', '#4263eb'] },
+  { id: 'roof', es: 'Techos', en: 'Roofing', pal: ['#0b7285', '#364fc7', '#5c940d'] },
+  { id: 'conc', es: 'Concreto y estructura', en: 'Concrete & Structural', pal: ['#868e96', '#495057', '#e8590c', '#1864ab'] },
+  { id: 'site', es: 'Obra civil / Sitio', en: 'Civil / Site', pal: ['#343a40', '#2b8a3e', '#1971c2', '#c92a2a', '#e67700'] }
+];
+const tradeById = id => TRADES.find(t => t.id === id);
+const tradeName = id => { const t = tradeById(id); return t ? t.es : ''; };
+// Sheet disciplines (US National CAD Standard designators) and the trades each one feeds
+const DISCS = { mech: ['mech'], plumb: ['plumb'], fire: ['fire'], elec: ['elec'], lowv: ['lowv'], arch: ['drywall', 'finish', 'doors', 'roof'], struct: ['conc'], civil: ['site'] };
+const DISC_LABEL = { mech: 'Mecánico', plumb: 'Plomería', fire: 'Incendios', elec: 'Eléctrico', lowv: 'Bajo voltaje', arch: 'Arquitectónico', struct: 'Estructural', civil: 'Civil', gen: 'General' };
+const DISC_PREFIX = { M: 'mech', H: 'mech', MH: 'mech', MP: 'mech', MD: 'mech', ME: 'mech', P: 'plumb', PL: 'plumb', PD: 'plumb', FP: 'fire', F: 'fire', FS: 'fire',
+  E: 'elec', EP: 'elec', EL: 'elec', ES: 'elec', ED: 'elec', T: 'lowv', TC: 'lowv', TN: 'lowv', TY: 'lowv', LV: 'lowv', FA: 'lowv', Y: 'lowv',
+  A: 'arch', AD: 'arch', AE: 'arch', I: 'arch', ID: 'arch', Q: 'arch', D: 'arch', S: 'struct', SF: 'struct', C: 'civil', CS: 'civil', CG: 'civil', CU: 'civil', CP: 'civil', L: 'civil', LS: 'civil', V: 'civil', G: 'gen', GI: 'gen', CV: 'gen' };
+const DISC_WORDS = [['fire', /FIRE PROTECTION|SPRINKLER/g], ['lowv', /FIRE ALARM|TELECOM|TECHNOLOGY|LOW VOLTAGE|SECURITY PLAN|DATA PLAN/g], ['plumb', /PLUMBING|SANITARY|DOMESTIC WATER|WASTE AND VENT/g],
+  ['mech', /MECHANICAL|HVAC|DUCTWORK/g], ['elec', /ELECTRICAL|LIGHTING PLAN|POWER PLAN/g], ['struct', /STRUCTURAL|FOUNDATION PLAN|FRAMING PLAN/g],
+  ['civil', /CIVIL|GRADING|UTILITY PLAN|SITE PLAN|EROSION/g], ['arch', /ARCHITECTURAL|REFLECTED CEILING|FINISH PLAN|DOOR SCHEDULE/g]];
+function discFromName(n) {
+  const m = /^([A-Z]{1,3})[-.\s]?\d/.exec(String(n || '').toUpperCase().trim());
+  if (!m) return null;
+  return DISC_PREFIX[m[1]] || DISC_PREFIX[m[1][0]] || null;
+}
+function discFromText(text) {
+  let best = null, bn = 0;
+  for (const [d, re] of DISC_WORDS) { const n = (text.match(re) || []).length; if (n > bn) { bn = n; best = d; } }
+  return best;
+}
+const curSheet = () => S.sheets[S.pageNum - 1];
+function activeTrades() {
+  const f = S.tradeFilter || 'auto';
+  if (f === 'all') return null;
+  if (f !== 'auto') return [f];
+  const sh = curSheet(), d = sh && sh.disc;
+  return d && DISCS[d] ? DISCS[d] : null;
+}
+function visibleConds() {
+  const t = activeTrades();
+  const list = t ? S.conditions.filter(c => !c.trade || t.includes(c.trade)) : S.conditions;
+  return list.length ? list : S.conditions;
+}
+function guessTrade(c) {
+  const s = (c.system || '') + ' ' + (c.name || '');
+  if (/HVAC|Insulation|Chilled|Heating|Refrig|Duct|Diffuser|Grille|VAV|Damper/i.test(s)) return 'mech';
+  if (/Water|Sanitary|Storm|Vent|Gas|Plumb|Copper|PEX|PVC|No-Hub|Valve/i.test(s)) return 'plumb';
+  return '';
+}
+
+// Library of typical US takeoff items for every trade (starting points: set your own prices and labor)
+function tradePresets() {
+  const A = (name, f, base, unit, lab) => ({ name, f, base, unit, price: 0, lab: lab || 0 });
+  const out = [];
+  const add = (trade, list) => list.forEach((o, i) => out.push(Object.assign({ id: newId('c'), type: 'count', color: tradeById(trade).pal[i % tradeById(trade).pal.length], system: '', material: '', size: '', shape: 'none', w: 0, h: 0, d: 0, gauge: 'auto', piece: 0, hanger: 0, waste: 0, price: 0, labor: 0, ht: 0, th: 0, tags: [], asm: [] }, o, { trade })));
+  const box = [A('Device box 4" sq. w/ mud ring', 1, 'qty', 'EA', 0.25), A('Cover plate', 1, 'qty', 'EA', 0.05)];
+  const studWall = (stud, ga) => [A(`Metal stud ${stud} ${ga}`, 0.8, 'qty', 'EA', 0.12), A(`Track ${stud} ${ga}`, 2, 'qty', 'LF', 0.02), A('Gypsum board 5/8" Type X', 2.1, 'wall', 'SF', 0.012),
+    A('Tape & finish Level 4', 2, 'wall', 'SF', 0.016), A('Drywall screws 1-1/4"', 2, 'wall', 'EA', 0), A('Joint compound', 0.01, 'wall', 'GAL', 0), A(`Sound batt insulation ${stud}`, 1, 'wall', 'SF', 0.005)];
+  const door = (frame, leaves) => [A(`Hollow metal frame ${frame}`, 1, 'qty', 'EA', 1.5), A('Hinges 4-1/2" (each)', 3 * leaves, 'qty', 'EA', 0.1), A('Lockset / latchset', 1, 'qty', 'EA', 0.75), A('Door closer', leaves, 'qty', 'EA', 0.75), A('Wall/floor stop', leaves, 'qty', 'EA', 0.1)];
+  add('mech', [
+    { name: 'Rooftop Unit (RTU)', system: 'HVAC Equipment', material: 'Packaged unit', tags: ['RTU'], labor: 16, asm: [A('Roof curb', 1, 'qty', 'EA', 4), A('Condensate trap & drain', 1, 'qty', 'EA', 1)] },
+    { name: 'Air Handling Unit (AHU)', system: 'HVAC Equipment', material: 'Air handler', tags: ['AHU'], labor: 40 },
+    { name: 'Fan Coil Unit', system: 'HVAC Equipment', material: 'Fan coil', tags: ['FCU'], labor: 6 },
+    { name: 'Split System / Heat Pump', system: 'HVAC Equipment', material: 'Split system', tags: ['HP', 'CU', 'ACCU', 'AC'], labor: 12, asm: [A('Equipment pad', 1, 'qty', 'EA', 1)] },
+    { name: 'Exhaust Fan', system: 'HVAC Exhaust', material: 'Exhaust fan', tags: ['EF'], labor: 3 },
+    { name: 'Unit Heater', system: 'HVAC Heating', material: 'Unit heater', tags: ['UH', 'EUH', 'CUH'], labor: 3 },
+    { name: 'Exhaust Grille', system: 'HVAC Exhaust', material: 'Aluminum', size: '12x12', tags: ['EG', 'EXG'], labor: 0.6 },
+    { name: 'Thermostat', system: 'HVAC Controls', material: 'Programmable', labor: 1 },
+    { name: 'Refrigerant Line Set 3/8 x 7/8', type: 'linear', system: 'Refrigerant', material: 'ACR copper', size: '3/8 x 7/8', piece: 50, hanger: 6, waste: 5, labor: 0.12, asm: [A('Line set insulation 7/8"', 1, 'qty', 'LF', 0.02), A('Line set support', 1, 'hanger', 'EA', 0.15)] },
+    { name: 'Condensate Drain PVC 3/4"', type: 'linear', system: 'Condensate', material: 'PVC Sch 40', size: '3/4"', piece: 10, hanger: 4, waste: 5, labor: 0.08, asm: [A('Elbow 90° 3/4" PVC', 1, 'el90', 'EA', 0.15), A('Pipe strap 3/4"', 1, 'hanger', 'EA', 0.05)] }
+  ]);
+  add('plumb', [
+    { name: 'Water Closet', system: 'Plumbing Fixtures', material: 'Vitreous china', tags: ['WC'], labor: 3, asm: [A('Angle stop & supply 3/8"', 1, 'qty', 'EA', 0.3), A('Wax ring & bolts', 1, 'qty', 'EA', 0)] },
+    { name: 'Lavatory', system: 'Plumbing Fixtures', material: 'Vitreous china', tags: ['LAV'], labor: 2.5, asm: [A('Angle stop & supply 3/8"', 2, 'qty', 'EA', 0.3), A('P-trap 1-1/4"', 1, 'qty', 'EA', 0.4)] },
+    { name: 'Urinal', system: 'Plumbing Fixtures', material: 'Vitreous china', tags: ['UR'], labor: 3 },
+    { name: 'Sink', system: 'Plumbing Fixtures', material: 'Stainless steel', tags: ['SK'], labor: 3, asm: [A('Angle stop & supply 3/8"', 2, 'qty', 'EA', 0.3), A('P-trap 1-1/2"', 1, 'qty', 'EA', 0.4)] },
+    { name: 'Mop Sink', system: 'Plumbing Fixtures', material: 'Molded stone', tags: ['MS', 'MSB'], labor: 3 },
+    { name: 'Shower', system: 'Plumbing Fixtures', material: 'Valve & trim', tags: ['SH', 'SHR'], labor: 4 },
+    { name: 'Drinking Fountain', system: 'Plumbing Fixtures', material: 'Bi-level EWC', tags: ['DF', 'EWC'], labor: 3 },
+    { name: 'Floor Drain', system: 'Sanitary', material: 'Cast iron body', tags: ['FD'], labor: 2, asm: [A('Trap primer connection', 1, 'qty', 'EA', 0.5)] },
+    { name: 'Cleanout', system: 'Sanitary', material: 'Cast iron', tags: ['CO', 'FCO', 'WCO', 'GCO'], labor: 1 },
+    { name: 'Roof Drain', system: 'Storm', material: 'Cast iron body', tags: ['RD', 'OD'], labor: 4 },
+    { name: 'Water Heater', system: 'Domestic Hot Water', material: 'Water heater', tags: ['WH', 'EWH', 'GWH'], labor: 6, asm: [A('Expansion tank', 1, 'qty', 'EA', 0.75), A('T&P drain line', 1, 'qty', 'EA', 0.5)] },
+    { name: 'Hose Bibb', system: 'Domestic Cold Water', material: 'Frost-free', tags: ['HB', 'WHY'], labor: 1 },
+    { name: 'Gas Pipe 1" Black Steel', type: 'linear', system: 'Natural Gas', material: 'Black steel Sch 40', size: '1"', piece: 21, hanger: 8, waste: 5, labor: 0.22, asm: [A('Elbow 90° 1" black', 1, 'el90', 'EA', 0.4), A('Coupling 1" black', 1, 'piece', 'EA', 0.3), A('Clevis hanger 1"', 1, 'hanger', 'EA', 0.3)] }
+  ]);
+  add('fire', [
+    { name: 'Sprinkler Branch 1" Sch 40', type: 'linear', system: 'Wet Sprinkler', material: 'Black steel Sch 40 threaded', size: '1"', piece: 21, hanger: 12, waste: 5, labor: 0.14, asm: [A('Elbow 90° 1" threaded', 1, 'el90', 'EA', 0.3), A('Coupling 1" threaded', 1, 'piece', 'EA', 0.2), A('Hanger ring 1"', 1, 'hanger', 'EA', 0.25), A('Threaded rod 3/8"', 2, 'hanger', 'LF', 0)] },
+    { name: 'Sprinkler Main 4" Sch 10', type: 'linear', system: 'Wet Sprinkler', material: 'Black steel Sch 10 grooved', size: '4"', piece: 21, hanger: 15, waste: 5, labor: 0.3, asm: [A('Grooved elbow 90° 4"', 1, 'el90', 'EA', 0.6), A('Grooved coupling 4"', 1, 'piece', 'EA', 0.5), A('Clevis hanger 4"', 1, 'hanger', 'EA', 0.35), A('Threaded rod 1/2"', 2, 'hanger', 'LF', 0)] },
+    { name: 'Sprinkler Head Pendent', system: 'Wet Sprinkler', material: 'Quick response', labor: 0.5, asm: [A('Sprig / arm-over 1"', 1, 'qty', 'EA', 0.3), A('Escutcheon', 1, 'qty', 'EA', 0)] },
+    { name: 'Sprinkler Head Upright', system: 'Wet Sprinkler', material: 'Quick response', labor: 0.4 },
+    { name: 'Sprinkler Head Sidewall', system: 'Wet Sprinkler', material: 'Quick response', labor: 0.5 },
+    { name: 'Fire Department Connection', system: 'Fire Protection', material: 'Storz / 2-1/2"', tags: ['FDC'], labor: 6 },
+    { name: 'Sprinkler Riser Assembly', system: 'Fire Protection', material: 'Alarm check valve', tags: ['FSR', 'RISER'], labor: 16 },
+    { name: 'Standpipe Hose Valve', system: 'Standpipe', material: '2-1/2" angle valve', tags: ['FHV'], labor: 3 },
+    { name: 'Fire Extinguisher Cabinet', system: 'Fire Protection', material: 'Semi-recessed', tags: ['FEC', 'FE'], labor: 1.5 }
+  ]);
+  add('elec', [
+    { name: 'EMT 3/4"', type: 'linear', system: 'Branch Power', material: 'EMT', size: '3/4"', piece: 10, hanger: 10, waste: 5, labor: 0.045, asm: [A('EMT coupling 3/4"', 1, 'piece', 'EA', 0.03), A('EMT 90° elbow 3/4"', 1, 'el90', 'EA', 0.15), A('EMT strap 3/4"', 1, 'hanger', 'EA', 0.05), A('THHN #12 Cu', 3, 'qty', 'LF', 0.006)] },
+    { name: 'EMT 1"', type: 'linear', system: 'Feeders', material: 'EMT', size: '1"', piece: 10, hanger: 10, waste: 5, labor: 0.055, asm: [A('EMT coupling 1"', 1, 'piece', 'EA', 0.04), A('EMT 90° elbow 1"', 1, 'el90', 'EA', 0.2), A('EMT strap 1"', 1, 'hanger', 'EA', 0.05), A('THHN #10 Cu', 4, 'qty', 'LF', 0.007)] },
+    { name: 'MC Cable 12/2', type: 'linear', system: 'Branch Power', material: 'MC cable', size: '12/2', piece: 250, hanger: 6, waste: 10, labor: 0.025, asm: [A('MC cable support', 1, 'hanger', 'EA', 0.02)] },
+    { name: 'Duplex Receptacle 20A', system: 'Branch Power', material: 'Spec grade', tags: [], labor: 0.45, asm: box },
+    { name: 'GFCI Receptacle', system: 'Branch Power', material: 'Spec grade', labor: 0.55, asm: box },
+    { name: 'Single Pole Switch', system: 'Lighting Controls', material: 'Spec grade', labor: 0.4, asm: box },
+    { name: 'Occupancy Sensor', system: 'Lighting Controls', material: 'Dual technology', tags: ['OS'], labor: 0.6 },
+    { name: 'LED Troffer 2x4', system: 'Lighting', material: 'LED', size: '2x4', labor: 1, asm: [A('Fixture whip 6\' MC', 1, 'qty', 'EA', 0.25), A('Support wire', 2, 'qty', 'EA', 0.05)] },
+    { name: 'LED Downlight 6"', system: 'Lighting', material: 'LED', size: '6"', labor: 0.75 },
+    { name: 'Exit Sign', system: 'Lighting', material: 'LED w/ battery', labor: 0.75 },
+    { name: 'Emergency Light', system: 'Lighting', material: 'LED w/ battery', tags: ['EM'], labor: 0.75 },
+    { name: 'Panelboard 225A', system: 'Distribution', material: '42 circuit', tags: ['LP', 'PP', 'DP', 'RP', 'PNL'], labor: 10 },
+    { name: 'Disconnect Switch 30A', system: 'Distribution', material: 'NEMA 1/3R', tags: ['DS', 'DISC'], labor: 1.5 },
+    { name: 'Transformer 45 kVA', system: 'Distribution', material: 'Dry type', tags: ['XFMR', 'TX'], labor: 10 },
+    { name: 'Junction Box 4"', system: 'Branch Power', material: 'Steel', tags: ['JB'], labor: 0.35 }
+  ]);
+  add('lowv', [
+    { name: 'Cat 6 Cable', type: 'linear', system: 'Data', material: 'Cat 6 plenum', piece: 1000, hanger: 5, waste: 10, labor: 0.012, asm: [A('J-hook', 1, 'hanger', 'EA', 0.1)] },
+    { name: 'Data Outlet 2-Port', system: 'Data', material: 'Cat 6', labor: 0.6, asm: [A('RJ45 Cat 6 jack', 2, 'qty', 'EA', 0.15), A('Faceplate 2-port', 1, 'qty', 'EA', 0.05), A('Low-voltage ring', 1, 'qty', 'EA', 0.1)] },
+    { name: 'Wireless Access Point', system: 'Data', material: 'Ceiling mount', tags: ['WAP', 'AP'], labor: 1 },
+    { name: 'Security Camera', system: 'Security', material: 'IP dome', tags: ['CAM', 'CCTV'], labor: 1.5 },
+    { name: 'Card Reader', system: 'Access Control', material: 'Proximity', tags: ['CR'], labor: 2 },
+    { name: 'Smoke Detector', system: 'Fire Alarm', material: 'Addressable', labor: 0.5 },
+    { name: 'Horn / Strobe', system: 'Fire Alarm', material: 'Wall mount', labor: 0.6 },
+    { name: 'Manual Pull Station', system: 'Fire Alarm', material: 'Addressable', labor: 0.6 },
+    { name: 'Fire Alarm Cable 18/2', type: 'linear', system: 'Fire Alarm', material: 'FPLP', piece: 1000, hanger: 5, waste: 10, labor: 0.01, asm: [A('J-hook', 1, 'hanger', 'EA', 0.1)] },
+    { name: 'Cable Tray 12"', type: 'linear', system: 'Data', material: 'Wire basket', size: '12"', piece: 10, hanger: 5, waste: 5, labor: 0.15, asm: [A('Tray support', 1, 'hanger', 'EA', 0.5), A('Splice kit', 1, 'piece', 'EA', 0.1)] }
+  ]);
+  add('drywall', [
+    { name: 'Partition 3-5/8" Studs + 5/8" GWB 2 Sides', type: 'linear', system: 'Interior Partitions', material: 'Metal studs 16" o.c.', ht: 10, asm: studWall('3-5/8"', '20 ga') },
+    { name: 'Partition 6" Studs + 5/8" GWB 2 Sides', type: 'linear', system: 'Interior Partitions', material: 'Metal studs 16" o.c.', ht: 12, asm: studWall('6"', '20 ga') },
+    { name: 'Furring 7/8" + 5/8" GWB 1 Side', type: 'linear', system: 'Interior Partitions', material: 'Hat channel 16" o.c.', ht: 10, asm: [A('Hat channel 7/8"', 0.75, 'wall', 'LF', 0.01), A('Gypsum board 5/8" Type X', 1.05, 'wall', 'SF', 0.012), A('Tape & finish Level 4', 1, 'wall', 'SF', 0.016)] },
+    { name: 'Shaft Wall 2-HR', type: 'linear', system: 'Interior Partitions', material: 'CH studs + shaftliner', ht: 10, asm: [A('CH stud 2-1/2"', 0.8, 'qty', 'EA', 0.15), A('J-track 2-1/2"', 2, 'qty', 'LF', 0.02), A('Shaftliner 1"', 1.05, 'wall', 'SF', 0.015), A('Gypsum board 5/8" Type X', 2.1, 'wall', 'SF', 0.012), A('Tape & finish Level 4', 1, 'wall', 'SF', 0.016)] },
+    { name: 'Gypsum Board Ceiling', type: 'area', system: 'Ceilings', material: '5/8" GWB on hat channel', waste: 5, labor: 0.01, asm: [A('Gypsum board 5/8"', 1.1, 'qty', 'SF', 0.015), A('Hat channel 7/8"', 0.75, 'qty', 'LF', 0.01), A('Tape & finish Level 4', 1, 'qty', 'SF', 0.018)] }
+  ]);
+  add('finish', [
+    { name: 'Acoustical Ceiling 2x4 (ACT)', type: 'area', system: 'Ceilings', material: 'Mineral fiber on 15/16" grid', waste: 5, labor: 0.018, asm: [A('Ceiling tile 2x4', 0.125, 'qty', 'EA', 0), A('Main tee 12\'', 0.0208, 'qty', 'EA', 0), A('Cross tee 4\'', 0.125, 'qty', 'EA', 0), A('Wall angle 12\'', 0.0833, 'perim', 'EA', 0.05), A('Hanger wire 12 ga', 0.0625, 'qty', 'EA', 0.02)] },
+    { name: 'Acoustical Ceiling 2x2 (ACT)', type: 'area', system: 'Ceilings', material: 'Mineral fiber on 15/16" grid', waste: 5, labor: 0.02, asm: [A('Ceiling tile 2x2', 0.25, 'qty', 'EA', 0), A('Main tee 12\'', 0.0208, 'qty', 'EA', 0), A('Cross tee 4\'', 0.125, 'qty', 'EA', 0), A('Cross tee 2\'', 0.125, 'qty', 'EA', 0), A('Wall angle 12\'', 0.0833, 'perim', 'EA', 0.05), A('Hanger wire 12 ga', 0.0625, 'qty', 'EA', 0.02)] },
+    { name: 'Carpet Tile', type: 'area', system: 'Flooring', material: '24x24 carpet tile', waste: 5, labor: 0.018, asm: [A('Carpet tile 24x24', 0.25, 'qty', 'EA', 0), A('Carpet adhesive', 0.004, 'qty', 'GAL', 0)] },
+    { name: 'Luxury Vinyl Tile (LVT)', type: 'area', system: 'Flooring', material: 'LVT', waste: 7, labor: 0.025, asm: [A('Flooring adhesive', 0.005, 'qty', 'GAL', 0)] },
+    { name: 'Vinyl Composition Tile (VCT)', type: 'area', system: 'Flooring', material: 'VCT 12x12', waste: 5, labor: 0.02, asm: [A('Flooring adhesive', 0.005, 'qty', 'GAL', 0)] },
+    { name: 'Porcelain Tile Floor', type: 'area', system: 'Flooring', material: 'Porcelain tile', waste: 10, labor: 0.1, asm: [A('Thinset mortar 50 lb', 0.013, 'qty', 'BAG', 0), A('Grout 25 lb', 0.006, 'qty', 'BAG', 0)] },
+    { name: 'Sealed Concrete', type: 'area', system: 'Flooring', material: 'Penetrating sealer', labor: 0.006, asm: [A('Concrete sealer', 0.004, 'qty', 'GAL', 0)] },
+    { name: 'Rubber Base 4"', type: 'linear', system: 'Base', material: 'Rubber cove base', waste: 5, labor: 0.03, asm: [A('Base adhesive', 0.004, 'qty', 'GAL', 0)] },
+    { name: 'Paint Walls (Primer + 2 Coats)', type: 'linear', system: 'Painting', material: 'Eggshell latex', ht: 9, labor: 0, asm: [A('Primer', 0.0033, 'wall', 'GAL', 0.004), A('Paint finish coats', 0.0057, 'wall', 'GAL', 0.008)] },
+    { name: 'Paint Ceiling', type: 'area', system: 'Painting', material: 'Flat latex', labor: 0.01, asm: [A('Ceiling paint', 0.003, 'qty', 'GAL', 0)] },
+    { name: 'Wall Tile', type: 'linear', system: 'Wall Finishes', material: 'Ceramic tile', ht: 8, labor: 0, asm: [A('Ceramic wall tile', 1.1, 'wall', 'SF', 0.12), A('Thinset mortar 50 lb', 0.013, 'wall', 'BAG', 0)] }
+  ]);
+  add('doors', [
+    { name: 'Door HM 3070 w/ HM Frame', system: 'Doors', material: 'Hollow metal', size: '3\'-0" x 7\'-0"', labor: 2.5, asm: door('3070', 1) },
+    { name: 'Door Wood 3070 w/ HM Frame', system: 'Doors', material: 'Solid core wood', size: '3\'-0" x 7\'-0"', labor: 2.5, asm: door('3070', 1) },
+    { name: 'Pair of Doors 6070 w/ HM Frame', system: 'Doors', material: 'Hollow metal', size: '6\'-0" x 7\'-0"', labor: 4, asm: door('6070', 2) },
+    { name: 'Window 4x5', system: 'Windows', material: 'Aluminum', size: '4\'-0" x 5\'-0"', labor: 2.5, asm: [A('Perimeter sealant', 18, 'qty', 'LF', 0.02)] },
+    { name: 'Storefront Glazing', type: 'area', system: 'Windows', material: 'Aluminum storefront', waste: 0, labor: 0.25 }
+  ]);
+  add('roof', [
+    { name: 'TPO Roof 60 mil', type: 'area', system: 'Roofing', material: 'TPO mechanically attached', waste: 10, labor: 0.02, asm: [A('TPO membrane 60 mil', 1.1, 'qty', 'SF', 0), A('Polyiso insulation 2.6"', 1.05, 'qty', 'SF', 0.006), A('Cover board 1/2"', 1.05, 'qty', 'SF', 0.004), A('Fasteners & plates', 0.5, 'qty', 'EA', 0)] },
+    { name: 'Modified Bitumen Roof', type: 'area', system: 'Roofing', material: '2-ply SBS', waste: 10, labor: 0.03, asm: [A('SBS base & cap sheet', 2.2, 'qty', 'SF', 0), A('Polyiso insulation 2.6"', 1.05, 'qty', 'SF', 0.006)] },
+    { name: 'Metal Coping', type: 'linear', system: 'Roofing', material: '24 ga prefinished', piece: 10, waste: 5, labor: 0.15 },
+    { name: 'Roof Flashing / Curb', system: 'Roofing', material: 'Penetration flashing', labor: 2 }
+  ]);
+  add('conc', [
+    { name: 'Slab on Grade 4"', type: 'area', system: 'Concrete', material: '3000 psi', th: 4, labor: 0.02, asm: [A('Concrete 3000 psi', 1.05, 'vol', 'CY', 0.4), A('WWF 6x6 W1.4xW1.4', 1.1, 'qty', 'SF', 0.002), A('Vapor barrier 10 mil', 1.1, 'qty', 'SF', 0.001), A('Base course 4"', 0.0123, 'qty', 'CY', 0)] },
+    { name: 'Slab on Metal Deck 5"', type: 'area', system: 'Concrete', material: '3000 psi on composite deck', th: 5, labor: 0.025, asm: [A('Concrete 3000 psi', 1.05, 'vol', 'CY', 0.4), A('WWF 6x6 W1.4xW1.4', 1.1, 'qty', 'SF', 0.002), A('Composite metal deck', 1.05, 'qty', 'SF', 0.01)] },
+    { name: 'Continuous Footing 24"x12"', type: 'linear', system: 'Foundations', material: '3000 psi', ht: 1, th: 24, labor: 0.05, asm: [A('Concrete 3000 psi', 1.05, 'vol', 'CY', 0.5), A('Rebar #5 (3 cont.)', 3.3, 'qty', 'LF', 0.01), A('Formwork (2 sides)', 2, 'wall', 'SF', 0.08), A('Excavation', 1.5, 'vol', 'CY', 0)] },
+    { name: 'Concrete Wall 8"', type: 'linear', system: 'Concrete', material: '4000 psi', ht: 8, th: 8, labor: 0, asm: [A('Concrete 4000 psi', 1.05, 'vol', 'CY', 0.6), A('Formwork (2 sides)', 2, 'wall', 'SF', 0.1), A('Rebar #4 @ 12" E.W.', 2.2, 'wall', 'LF', 0.006)] },
+    { name: 'Spread Footing 4x4x1', system: 'Foundations', material: '3000 psi', labor: 2, asm: [A('Concrete 3000 psi', 0.62, 'qty', 'CY', 0.5), A('Rebar #5', 16, 'qty', 'LF', 0.01), A('Formwork', 16, 'qty', 'SF', 0.08)] },
+    { name: 'Steel Column', system: 'Structural Steel', material: 'HSS / W-shape', labor: 4, asm: [A('Base plate & anchor bolts', 1, 'qty', 'EA', 1)] },
+    { name: 'Steel Beam', type: 'linear', system: 'Structural Steel', material: 'W-shape', waste: 2, labor: 0.15 }
+  ]);
+  add('site', [
+    { name: 'Asphalt Paving 3" on 6" Base', type: 'area', system: 'Paving', material: 'HMA surface course', labor: 0.01, asm: [A('Asphalt (HMA)', 0.0181, 'qty', 'TON', 0), A('Aggregate base 6"', 0.0185, 'qty', 'CY', 0), A('Tack coat', 0.005, 'qty', 'GAL', 0)] },
+    { name: 'Concrete Sidewalk 4"', type: 'area', system: 'Paving', material: '3000 psi', th: 4, labor: 0.05, asm: [A('Concrete 3000 psi', 1.05, 'vol', 'CY', 0.4), A('Base course 4"', 0.0123, 'qty', 'CY', 0), A('Edge forms', 1, 'perim', 'LF', 0.03)] },
+    { name: 'Curb & Gutter', type: 'linear', system: 'Paving', material: '3000 psi', waste: 5, labor: 0.2, asm: [A('Concrete 3000 psi', 0.055, 'qty', 'CY', 0)] },
+    { name: 'Storm Pipe 12" RCP', type: 'linear', system: 'Storm', material: 'RCP Class III', size: '12"', piece: 8, waste: 2, labor: 0.3, asm: [A('Trench excavation & backfill', 0.5, 'qty', 'CY', 0), A('Bedding stone', 0.1, 'qty', 'CY', 0)] },
+    { name: 'Sanitary Sewer 8" PVC SDR-35', type: 'linear', system: 'Sanitary', material: 'PVC SDR-35', size: '8"', piece: 14, waste: 2, labor: 0.25, asm: [A('Trench excavation & backfill', 0.6, 'qty', 'CY', 0), A('Bedding stone', 0.1, 'qty', 'CY', 0)] },
+    { name: 'Water Line 6" DIP', type: 'linear', system: 'Water', material: 'Ductile iron Cl 350', size: '6"', piece: 18, waste: 2, labor: 0.3, asm: [A('Trench excavation & backfill', 0.6, 'qty', 'CY', 0), A('MJ bend 6"', 1, 'el90', 'EA', 1), A('Thrust block', 1, 'el90', 'EA', 1)] },
+    { name: 'Catch Basin / Inlet', system: 'Storm', material: 'Precast', tags: ['CB', 'INL', 'DI'], labor: 8 },
+    { name: 'Manhole', system: 'Sanitary', material: 'Precast 48"', tags: ['MH', 'SMH', 'SSMH', 'STMH'], labor: 10 },
+    { name: 'Fire Hydrant', system: 'Water', material: 'Dry barrel', tags: ['FH', 'HYD'], labor: 8 },
+    { name: 'Silt Fence', type: 'linear', system: 'Erosion Control', material: 'Geotextile', waste: 5, labor: 0.02 }
+  ]);
+  if (S.units === 'metric') out.forEach(toMetricPreset);
+  return out;
+}
+// Presets are written in US units; convert one when the project is metric
+function toMetricPreset(c) {
+  const fl = 3.28084, fa = 10.7639, k = c.type === 'linear' ? fl : c.type === 'area' ? fa : 1;
+  c.labor = +(c.labor * k).toFixed(4);
+  c.piece = +(c.piece * 0.3048).toFixed(3); c.hanger = +(c.hanger * 0.3048).toFixed(3); c.ht = +(c.ht * 0.3048).toFixed(3); c.th = Math.round(c.th * 25.4);
+  const rename = { LF: 'm', SF: 'm²', CY: 'm³' };
+  c.asm.forEach(a => {
+    const per = a.base === 'qty' ? k : a.base === 'wall' ? fa : a.base === 'perim' ? fl : 1;
+    const back = a.unit === 'LF' ? fl : a.unit === 'SF' ? fa : a.unit === 'CY' && a.base !== 'vol' ? 1 / 1.30795 : 1;
+    a.f = +(a.f * per / back).toPrecision(4); a.lab = +(a.lab * back).toPrecision(4);
+    if (rename[a.unit]) a.unit = rename[a.unit];
+  });
+}
+// Equipment/fixture tags the auto-detector looks for, for the built-in mechanical presets
+const PRESET_TAGS = { 'VAV Box': ['VAV'], 'Supply Diffuser 24x24': ['SD', 'CD'], 'Return Grille 24x24': ['RG', 'RA', 'RR'], 'Fire Damper': ['FD', 'FSD'] };
+
+/* Condition list grouped by trade, filtered by the current sheet's discipline */
+function renderTradeSel() {
+  const sel = $('#tradeSel'); if (!sel) return;
+  const sh = curSheet(), d = sh && sh.disc;
+  const auto = `Auto (${d ? DISC_LABEL[d] : 'todos'})`;
+  const html = `<option value="auto">${esc(auto)}</option><option value="all">Todos los oficios</option>` + TRADES.map(t => `<option value="${t.id}">${esc(t.es)}</option>`).join('');
+  if (sel.__h !== html) { sel.innerHTML = html; sel.__h = html; }
+  sel.value = S.tradeFilter || 'auto';
+}
+
+/* ---------- Detect tags on the drawing ---------- */
+async function sheetTokens(n) {
+  const sh = S.sheets[n - 1], doc = sh && S.pdfs[sh.doc]; if (!doc) return null;
+  const pg = await doc.getPage(sh.page), vp = pg.getViewport({ scale: 1 }), tc = await pg.getTextContent();
+  const out = [];
+  tc.items.forEach(it => {
+    const str = it.str || ''; if (!str.trim()) return;
+    const [a, b, c, d, e, f] = it.transform, L = Math.hypot(a, b) || 1, h = Math.hypot(c, d) || 1;
+    const re = /\S+/g; let m;
+    while ((m = re.exec(str))) {
+      const frac = (m.index + m[0].length / 2) / str.length, w = it.width || str.length * h * 0.5;
+      const x = e + a / L * w * frac + c / h * h * 0.35, y = f + b / L * w * frac + d / h * h * 0.35;
+      const [px, py] = vp.convertToViewportPoint(x, y);
+      out.push({ t: m[0].replace(/[.,;:()]+$/g, '').toUpperCase(), x: px, y: py, h, x0: vp.convertToViewportPoint(e, f)[0] });
+    }
+  });
+  return out;
+}
+// Drop tags that sit in a schedule column (3+ stacked, left-aligned): those are tables, not the plan
+function dropScheduleTags(toks) {
+  const keep = new Set(toks);
+  const byPrefix = {};
+  toks.forEach(t => (byPrefix[t.prefix] = byPrefix[t.prefix] || []).push(t));
+  Object.values(byPrefix).forEach(list => {
+    const sorted = [...list].sort((a, b) => a.x0 - b.x0);
+    let i = 0;
+    while (i < sorted.length) {
+      let j = i; while (j + 1 < sorted.length && Math.abs(sorted[j + 1].x0 - sorted[i].x0) < 2) j++;
+      const col = sorted.slice(i, j + 1).sort((a, b) => a.y - b.y);
+      let run = [col[0]];
+      const flush = () => { if (run.length >= 3) run.forEach(t => keep.delete(t)); };
+      for (let k = 1; k < col.length; k++) { if (col[k].y - col[k - 1].y < col[k].h * 5) run.push(col[k]); else { flush(); run = [col[k]]; } }
+      flush(); i = j + 1;
+    }
+  });
+  return toks.filter(t => keep.has(t));
+}
+function tagIndex(trades) {
+  const idx = {};
+  const pool = [...S.conditions.filter(c => c.type === 'count' && (!trades || !c.trade || trades.includes(c.trade))), ...S.conditions.filter(c => c.type === 'count')];
+  pool.forEach(c => (c.tags || []).forEach(t => { const k = String(t).toUpperCase().trim(); if (k && !idx[k]) idx[k] = c.id; }));
+  return idx;
+}
+async function scanTags(scope, custom) {
+  const pages = scope === 'all' ? S.sheets.map((_, i) => i + 1) : [S.pageNum];
+  const sheetNames = new Set(S.sheets.map(s => String(s.name).toUpperCase()));
+  const groups = {};
+  const cust = (custom || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+  for (const n of pages) {
+    const toks = await sheetTokens(n); if (!toks) continue;
+    const sh = S.sheets[n - 1], trades = sh && sh.disc && DISCS[sh.disc] ? DISCS[sh.disc] : null;
+    const idx = tagIndex(trades);
+    const found = [];
+    toks.forEach(t => {
+      if (cust.includes(t.t)) { found.push(Object.assign(t, { prefix: t.t, key: t.t })); return; }
+      const m = /^([A-Z]{2,5})-?(\d{1,3}[A-Z]?)?$/.exec(t.t); if (!m) return;
+      if (sheetNames.has(t.t)) return;
+      const known = idx[m[1]];
+      if (!known && !(m[2] && /^[A-Z]{2,5}-\d{1,2}[A-Z]?$/.test(t.t))) return;   // unknown prefixes only as TAG-N
+      found.push(Object.assign(t, { prefix: m[1], key: m[1], cond: known || null, trades }));
+    });
+    dropScheduleTags(found).forEach(t => {
+      const g = groups[t.key] || (groups[t.key] = { key: t.key, cond: t.cond || null, trades: t.trades, pts: {}, n: 0, labels: new Set() });
+      (g.pts[n] = g.pts[n] || []).push([t.x, t.y]); g.n++; g.labels.add(t.t);
+    });
+  }
+  return Object.values(groups).sort((a, b) => (!!b.cond - !!a.cond) || b.n - a.n);
+}
+function openDetect() {
+  if (!S.pdf) { toast('Primero abre un plano'); return; }
+  const countConds = () => S.conditions.filter(c => c.type === 'count');
+  modal(`<h3>Detectar en el plano</h3>
+    <p style="color:var(--muted);margin-top:-4px">Busca etiquetas de texto de equipos y accesorios (VAV-1, RTU-2, WC-1, FDC…) y las convierte en conteos. Revisa la lista y desmarca lo que no aplique.</p>
+    <div class="form" style="grid-template-columns:150px 1fr"><label>Dónde buscar</label><select id="detScope"><option value="page">Esta hoja</option><option value="all">Todas las hojas</option></select>
+    <label>Texto adicional</label><input type="text" id="detCustom" placeholder="Ej.: F1, TYPE A (separados por coma)"></div>
+    <div style="margin:8px 0"><button id="detRun" type="button">Buscar</button> <span id="detMsg" style="color:var(--muted)"></span></div>
+    <div id="detRes" style="max-height:46vh;overflow:auto"></div>`, [
+    { t: 'Cancelar' },
+    { t: 'Agregar conteos', primary: true, f: () => applyDetect() }
+  ]);
+  $('#modal').style.maxWidth = '720px';
+  let res = [];
+  const run = async () => {
+    $('#detMsg').textContent = 'Leyendo el texto del plano…'; $('#detRes').innerHTML = '';
+    res = await scanTags($('#detScope').value, $('#detCustom').value);
+    S.detect = res;
+    if (!res.length) { $('#detMsg').textContent = 'No se encontraron etiquetas. Si el plano no tiene texto (está escaneado o en curvas), usa “Buscar símbolo”.'; return; }
+    $('#detMsg').textContent = `${res.reduce((s, g) => s + g.n, 0)} etiqueta(s) en ${res.length} grupo(s)`;
+    const opts = (sel, tr) => `<option value="__new">+ Nueva condición</option>` + countConds().map((c, i) => [c, (!tr || tr.includes(c.trade) ? 0 : 1) * 1e4 + i]).sort((x, y) => x[1] - y[1]).map(x => x[0]).map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+    $('#detRes').innerHTML = `<table class="estSys" style="width:100%"><thead><tr><th></th><th>Etiqueta</th><th>Encontradas</th><th>Ejemplos</th><th>Condición</th></tr></thead><tbody>${res.map((g, i) => `<tr><td><input type="checkbox" class="detOn" data-i="${i}" ${g.cond ? 'checked' : ''}></td><td><b>${esc(g.key)}</b></td><td>${g.n}</td><td style="color:var(--muted)">${esc([...g.labels].slice(0, 4).join(', '))}</td><td><select class="detCond" data-i="${i}">${opts(g.cond, g.trades)}</select></td></tr>`).join('')}</tbody></table>`;
+  };
+  $('#detRun').addEventListener('click', run); $('#detScope').addEventListener('change', run);
+  run();
+}
+function applyDetect() {
+  const res = S.detect || []; let added = 0, made = 0;
+  const rows = [...document.querySelectorAll('#detRes .detOn')].filter(x => x.checked).map(x => ({ g: res[+x.dataset.i], cond: document.querySelector(`.detCond[data-i="${x.dataset.i}"]`).value }));
+  if (!rows.length) { toast('Marca al menos una etiqueta'); return false; }
+  pushUndo();
+  rows.forEach(({ g, cond }) => {
+    let c = condById(cond);
+    if (!c) {
+      const tr = (g.trades || activeTrades() || [''])[0] || '';
+      const pal = (tradeById(tr) || TRADES[0]).pal;
+      c = { id: newId('c'), name: g.key, type: 'count', color: pal[S.conditions.length % pal.length], system: '', material: '', size: '', shape: 'none', w: 0, h: 0, d: 0, gauge: 'auto', piece: 0, hanger: 0, waste: 0, price: 0, labor: 0, ht: 0, th: 0, trade: tr, tags: [g.key], asm: [] };
+      S.conditions.push(c); made++;
+    }
+    added += addCountPoints(c.id, g.pts, 3);
+  });
+  refresh();
+  toast(`${added} conteo(s) agregados${made ? ` · ${made} condición(es) nueva(s)` : ''}`);
+}
+// Add count marks per page, skipping points that already have a mark of that condition nearby
+function addCountPoints(cid, ptsByPage, tol) {
+  let added = 0;
+  Object.entries(ptsByPage).forEach(([pg, pts]) => {
+    pg = +pg;
+    const existing = S.items.filter(i => i.type === 'count' && i.cond === cid && i.page === pg).flatMap(i => i.points);
+    const fresh = pts.filter(p => !existing.some(q => dist(p, q) < tol));
+    if (!fresh.length) return;
+    S.items.push({ id: newId('m'), page: pg, type: 'count', cond: cid, points: fresh, auto: true });
+    added += fresh.length;
+  });
+  return added;
+}
+
+/* ---------- Symbol search (template matching on the rendered sheet) ---------- */
+const tick = () => new Promise(r => setTimeout(r, 0));
+async function rasterSheet(n, sc) {
+  const sh = S.sheets[n - 1], doc = sh && S.pdfs[sh.doc]; if (!doc) return null;
+  const pg = await doc.getPage(sh.page), vp0 = pg.getViewport({ scale: 1 });
+  sc = Math.min(sc, Math.sqrt(2e7 / (vp0.width * vp0.height)));
+  const vp = pg.getViewport({ scale: sc });
+  const cv = document.createElement('canvas'); cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height);
+  const ctx = cv.getContext('2d', { willReadFrequently: true }); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+  await pg.render({ canvasContext: ctx, viewport: vp }).promise;
+  const W = cv.width, H = cv.height, px = ctx.getImageData(0, 0, W, H).data, B = new Uint8Array(W * H);
+  for (let i = 0, j = 0; i < B.length; i++, j += 4) B[i] = px[j] * 0.3 + px[j + 1] * 0.59 + px[j + 2] * 0.11 < 170 ? 1 : 0;
+  cv.width = cv.height = 1;
+  return { W, H, B, sc };
+}
+function dilate(B, W, H) {
+  const T = new Uint8Array(W * H), D = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) { const r = y * W; for (let x = 0; x < W; x++) T[r + x] = B[r + x] | (x > 0 ? B[r + x - 1] : 0) | (x < W - 1 ? B[r + x + 1] : 0); }
+  for (let y = 0; y < H; y++) { const r = y * W; for (let x = 0; x < W; x++) D[r + x] = T[r + x] | (y > 0 ? T[r + x - W] : 0) | (y < H - 1 ? T[r + x + W] : 0); }
+  return D;
+}
+function integral(B, W, H) {
+  const I = new Uint32Array((W + 1) * (H + 1));
+  for (let y = 0; y < H; y++) { let s = 0; for (let x = 0; x < W; x++) { s += B[y * W + x]; I[(y + 1) * (W + 1) + x + 1] = I[y * (W + 1) + x + 1] + s; } }
+  return I;
+}
+// Cut the selected symbol (trimmed to its ink) out of the raster as a small binary template
+function makeTemplate(R, rect) {
+  const { W, B, sc } = R;
+  let x0 = Math.max(0, Math.floor(Math.min(rect[0][0], rect[1][0]) * sc)), y0 = Math.max(0, Math.floor(Math.min(rect[0][1], rect[1][1]) * sc));
+  let x1 = Math.min(R.W - 1, Math.ceil(Math.max(rect[0][0], rect[1][0]) * sc)), y1 = Math.min(R.H - 1, Math.ceil(Math.max(rect[0][1], rect[1][1]) * sc));
+  let ax = Infinity, ay = Infinity, bx = -1, by = -1;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (B[y * W + x]) { if (x < ax) ax = x; if (y < ay) ay = y; if (x > bx) bx = x; if (y > by) by = y; }
+  if (bx < 0) return null;
+  const tw = bx - ax + 1, th = by - ay + 1, T = new Uint8Array(tw * th);
+  for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) T[y * tw + x] = B[(ay + y) * W + ax + x];
+  return { tw, th, T };
+}
+function rotTemplate(t) {   // 90° clockwise
+  const { tw, th, T } = t, R = new Uint8Array(tw * th);
+  for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) R[x * th + (th - 1 - y)] = T[y * tw + x];
+  return { tw: th, th: tw, T: R };
+}
+async function matchTemplate(R, tpls, thr, D, I) {
+  const { W, H, B } = R, cands = [];
+  for (const t of tpls) {
+    const { tw, th, T } = t, Td = dilate(T, tw, th);
+    const on = [], onD = [];
+    for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) { if (T[y * tw + x]) on.push(y * W + x); if (Td[y * tw + x]) onD.push(y * W + x); }
+    const n = on.length; if (n < 12) continue;
+    const lo = n * 0.6, hi = n * 1.9, maxMiss = Math.floor(n * (1 - thr)), W1 = W + 1;
+    for (let y = 0; y + th <= H; y++) {
+      if ((y & 63) === 0) await tick();
+      for (let x = 0; x + tw <= W; x++) {
+        const cnt = I[(y + th) * W1 + x + tw] - I[y * W1 + x + tw] - I[(y + th) * W1 + x] + I[y * W1 + x];
+        if (cnt < lo || cnt > hi) continue;
+        const base = y * W + x; let miss = 0;
+        for (let k = 0; k < n; k++) if (!D[base + on[k]] && ++miss > maxMiss) break;
+        if (miss > maxMiss) continue;
+        let hit = 0; for (let k = 0; k < onD.length; k++) hit += B[base + onD[k]];
+        const prec = hit / cnt; if (prec < thr - 0.1) continue;
+        cands.push([x + tw / 2, y + th / 2, (1 - miss / n + prec) / 2, tw, th]);
+      }
+    }
+  }
+  cands.sort((a, b) => b[2] - a[2]);
+  const keep = [];
+  for (const c of cands) if (!keep.some(k => Math.abs(k[0] - c[0]) < Math.max(k[3], c[3]) * 0.6 && Math.abs(k[1] - c[1]) < Math.max(k[4], c[4]) * 0.6)) keep.push(c);
+  return keep.map(k => [k[0] / R.sc, k[1] / R.sc]);
+}
+async function symbolSearch(rect, scope) {
+  const rw = Math.abs(rect[1][0] - rect[0][0]), rh = Math.abs(rect[1][1] - rect[0][1]);
+  if (rw < 2 || rh < 2) { toast('Encierra el símbolo con un recuadro'); return; }
+  const f = S.find = S.find && S.find.rect === rect ? S.find : { rect, page: S.pageNum, pts: {}, scope: 'page' };
+  f.scope = scope || f.scope; f.busy = true;
+  const sc = Math.max(1, Math.min(6, 40 / Math.max(rw, rh)));
+  const thr = +$('#findSens').value || 0.8, rot = $('#findRot').checked;
+  showFindBar('Buscando…');
+  try {
+    const R0 = await rasterSheet(f.page, sc);
+    let tpl = makeTemplate(R0, rect);
+    if (!tpl || tpl.tw * tpl.th < 30) { toast('El recuadro no tiene suficiente dibujo. Encierra el símbolo completo.'); endFind(); return; }
+    const tpls = [tpl]; if (rot) { let t = tpl; for (let i = 0; i < 3; i++) { t = rotTemplate(t); tpls.push(t); } }
+    const pages = f.scope === 'all' ? S.sheets.map((_, i) => i + 1).filter(n => S.pdfs[S.sheets[n - 1].doc]) : [f.page];
+    f.pts = {};
+    for (const n of pages) {
+      showFindBar(pages.length > 1 ? `Buscando en la hoja ${pages.indexOf(n) + 1} de ${pages.length}…` : 'Buscando…');
+      const R = n === f.page ? R0 : await rasterSheet(n, R0.sc);
+      if (!R) continue;
+      const pts = await matchTemplate(R, tpls, thr, dilate(R.B, R.W, R.H), integral(R.B, R.W, R.H));
+      if (pts.length) f.pts[n] = pts;
+      if (!S.find) return;   // cancelled
+    }
+  } catch (e) { console.error(e); toast('No se pudo buscar el símbolo: ' + e.message); }
+  f.busy = false;
+  showFindBar(); drawOverlay();
+}
+function findTotal() { return S.find ? Object.values(S.find.pts).reduce((s, a) => s + a.length, 0) : 0; }
+function showFindBar(msg) {
+  const f = S.find; $('#findBar').hidden = !f; if (!f) return;
+  const here = (f.pts[S.pageNum] || []).length, tot = findTotal(), pages = Object.keys(f.pts).length;
+  $('#findTxt').textContent = msg || (f.scope === 'all' ? `${tot} encontrados en ${pages} hoja(s) · clic en un recuadro para quitarlo` : `${here} encontrados en esta hoja · clic en un recuadro para quitarlo`);
+  const conds = S.conditions.filter(c => c.type === 'count'), vis = visibleConds().filter(c => c.type === 'count');
+  const cur = $('#findCond').value;
+  const def = condById(cur) && cur || (condById(S.activeCond) && condById(S.activeCond).type === 'count' ? S.activeCond : (vis[0] || conds[0] || {}).id);
+  $('#findCond').innerHTML = `<option value="__new">+ Nueva condición</option>` + [...vis, ...conds.filter(c => !vis.includes(c))].map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  $('#findCond').value = def || '__new';
+  $('#findAdd').disabled = !!f.busy || !tot; $('#findAll').disabled = !!f.busy || f.scope === 'all';
+  $('#findAdd').textContent = `Agregar ${tot} conteo(s)`;
+}
+function endFind() { S.find = null; $('#findBar').hidden = true; drawOverlay(); }
+function findOverlay() {
+  const f = S.find; if (!f) return '';
+  let h = '';
+  const q = 7 / S.zoom;
+  if (f.page === S.pageNum) { const [a, b] = f.rect; h += `<rect x="${Math.min(a[0], b[0])}" y="${Math.min(a[1], b[1])}" width="${Math.abs(b[0] - a[0])}" height="${Math.abs(b[1] - a[1])}" fill="none" stroke="#7048e8" stroke-width="1.5" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>`; }
+  (f.pts[S.pageNum] || []).forEach((p, i) => { h += `<rect data-found="${i}" x="${p[0] - q}" y="${p[1] - q}" width="${q * 2}" height="${q * 2}" fill="#7048e8" fill-opacity=".18" stroke="#7048e8" stroke-width="2" vector-effect="non-scaling-stroke" style="cursor:pointer"/>`; });
+  return h;
+}
+function addFound() {
+  const f = S.find; if (!f || !findTotal()) return;
+  let cid = $('#findCond').value;
+  pushUndo();
+  if (!condById(cid)) {
+    const tr = (activeTrades() || [''])[0] || '', pal = (tradeById(tr) || TRADES[0]).pal;
+    const c = { id: newId('c'), name: 'Símbolo ' + (S.conditions.filter(x => /^Símbolo \d+$/.test(x.name)).length + 1), type: 'count', color: pal[S.conditions.length % pal.length], system: '', material: '', size: '', shape: 'none', w: 0, h: 0, d: 0, gauge: 'auto', piece: 0, hanger: 0, waste: 0, price: 0, labor: 0, ht: 0, th: 0, trade: tr, tags: [], asm: [] };
+    S.conditions.push(c); cid = c.id;
+  }
+  const n = addCountPoints(cid, f.pts, 4);
+  S.activeCond = cid; endFind(); refresh();
+  toast(`${n} conteo(s) agregados a ${condById(cid).name}`);
+}
+
+/* ---------- Library: add trades to an existing project ---------- */
+function openLibrary() {
+  const all = tradePresets(), have = new Set(S.conditions.map(c => c.name));
+  modal(`<h3>Biblioteca de oficios</h3><p style="color:var(--muted);margin-top:-4px">Agrega al proyecto las condiciones típicas de cada oficio, con ensambles y mano de obra de referencia.</p>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:6px 14px">${TRADES.map(t => { const n = all.filter(c => c.trade === t.id && !have.has(c.name)).length; return `<label><input type="checkbox" class="libT" value="${t.id}" ${n ? '' : 'disabled'}> ${esc(t.es)}</label><span style="color:var(--muted)">${n ? n + ' nuevas' : 'ya están'}</span>`; }).join('')}</div>`, [
+    { t: 'Cancelar' },
+    { t: 'Agregar', primary: true, f: () => {
+      const ids = [...document.querySelectorAll('.libT')].filter(x => x.checked).map(x => x.value);
+      const add = all.filter(c => ids.includes(c.trade) && !have.has(c.name)).map(applyDefaultLabor);
+      if (!add.length) return false;
+      pushUndo(); S.conditions.push(...add); refresh(); toast(`${add.length} condición(es) agregadas`);
+    } }
+  ]);
+}
+
+/* ---------- Wiring ---------- */
+$('#btnDetect').addEventListener('click', openDetect);
+$('#btnLib').addEventListener('click', openLibrary);
+$('#tradeSel').addEventListener('change', e => { S.tradeFilter = e.target.value; try { localStorage.setItem('smarttakeoff:trade', S.tradeFilter); } catch (err) { } renderConditions(); });
+try { S.tradeFilter = localStorage.getItem('smarttakeoff:trade') || 'auto'; } catch (e) { S.tradeFilter = 'auto'; }
+$('#findExit').addEventListener('click', endFind);
+$('#findAdd').addEventListener('click', addFound);
+$('#findAll').addEventListener('click', () => { if (S.find) symbolSearch(S.find.rect, 'all'); });
+$('#findSens').addEventListener('change', () => { if (S.find) symbolSearch(S.find.rect); });
+$('#findRot').addEventListener('change', () => { if (S.find) symbolSearch(S.find.rect); });
+
+/* ---------- Translations for this section ---------- */
+TRADES.forEach(t => { UI_EN[t.es] = t.en; EN[t.es] = t.en; });
+Object.assign(UI_EN, {
+  'Mecánico': 'Mechanical', 'Plomería': 'Plumbing', 'Incendios': 'Fire Prot.', 'Eléctrico': 'Electrical', 'Bajo voltaje': 'Low Voltage', 'Arquitectónico': 'Architectural', 'Estructural': 'Structural', 'Civil': 'Civil', 'General': 'General',
+  'Todos los oficios': 'All trades', 'Biblioteca': 'Library', 'Agregar condiciones de otros oficios': 'Add conditions for other trades', 'Mostrar condiciones de': 'Show conditions for',
+  'Detectar': 'Detect', 'Detectar etiquetas de equipos y accesorios en el plano y convertirlas en conteos': 'Detect equipment and fixture tags on the drawing and turn them into counts',
+  'Buscar símbolo': 'Find Symbol', 'Buscar símbolo: encierra uno y encuentra todos los iguales (B)': 'Find symbol: box one and find all matching ones (B)',
+  'Dibuja un recuadro alrededor de un símbolo (clic en dos esquinas) para encontrar todos los iguales': 'Draw a box around a symbol (click two corners) to find all matching ones',
+  'Detectar en el plano': 'Detect on drawing', 'Busca etiquetas de texto de equipos y accesorios (VAV-1, RTU-2, WC-1, FDC…) y las convierte en conteos. Revisa la lista y desmarca lo que no aplique.': 'Finds equipment and fixture text tags (VAV-1, RTU-2, WC-1, FDC…) and turns them into counts. Review the list and uncheck anything that does not apply.',
+  'Dónde buscar': 'Search in', 'Esta hoja': 'This sheet', 'Todas las hojas': 'All sheets', 'Texto adicional': 'Extra text', 'Ej.: F1, TYPE A (separados por coma)': 'e.g. F1, TYPE A (comma separated)', 'Buscar': 'Search',
+  'Leyendo el texto del plano…': 'Reading the drawing text…', 'No se encontraron etiquetas. Si el plano no tiene texto (está escaneado o en curvas), usa “Buscar símbolo”.': 'No tags found. If the drawing has no text (scanned or outlined), use “Find Symbol”.',
+  'Etiqueta': 'Tag', 'Encontradas': 'Found', 'Ejemplos': 'Examples', '+ Nueva condición': '+ New condition', 'Agregar conteos': 'Add counts', 'Marca al menos una etiqueta': 'Check at least one tag',
+  'Primero abre un plano': 'Open a drawing first', 'Incluir girados': 'Include rotated', 'Estricta': 'Strict', 'Normal': 'Normal', 'Flexible': 'Loose', 'Buscar en todas las hojas': 'Search all sheets', 'Cancelar': 'Cancel',
+  'Buscando…': 'Searching…', 'Encierra el símbolo con un recuadro': 'Draw a box around the symbol', 'El recuadro no tiene suficiente dibujo. Encierra el símbolo completo.': 'The box has too little drawing in it. Box the whole symbol.',
+  'Biblioteca de oficios': 'Trade library', 'Agrega al proyecto las condiciones típicas de cada oficio, con ensambles y mano de obra de referencia.': 'Add typical conditions for each trade to the project, with reference assemblies and labor.',
+  'ya están': 'already added', 'Agregar': 'Add', 'Oficio': 'Trade', '(sin oficio)': '(no trade)', 'Disciplina': 'Discipline', '(sin detectar)': '(not detected)',
+  'Etiquetas en plano': 'Drawing tags', 'VAV, RTU, WC… (separadas por coma)': 'VAV, RTU, WC… (comma separated)', 'Etiquetas de texto que “Detectar” convierte en conteos de esta condición.': 'Text tags that “Detect” turns into counts of this condition.',
+  'Espesor': 'Thickness', 'Altura de muro': 'Wall height', 'Con altura, el largo × altura da el área de muro. Con espesor, sale el volumen de concreto.': 'With a height, length × height gives the wall area. With a thickness, you get the concrete volume.',
+  'por área de muro (largo × altura)': 'per wall area (length × height)', 'por volumen (yd³ / m³)': 'per volume (CY / m³)', 'por perímetro del área': 'per area perimeter', 'Otras': 'Other'
+});
+EN['Oficio'] = 'Trade';
+UI_PATTERNS.unshift(
+  [/^Auto \((.*)\)$/, (m, a) => `Auto (${a === 'todos' ? 'all' : trUI(a)})`],
+  [/^(\d+) encontrados en esta hoja · clic en un recuadro para quitarlo$/, (m, a) => `${a} found on this sheet · click a box to remove it`],
+  [/^(\d+) encontrados en (\d+) hoja\(s\) · clic en un recuadro para quitarlo$/, (m, a, b) => `${a} found on ${b} sheet(s) · click a box to remove it`],
+  [/^Buscando en la hoja (\d+) de (\d+)…$/, (m, a, b) => `Searching sheet ${a} of ${b}…`],
+  [/^Agregar (\d+) conteo\(s\)$/, (m, a) => `Add ${a} count(s)`],
+  [/^(\d+) conteo\(s\) agregados a (.*)$/, (m, a, b) => `${a} count(s) added to ${b}`],
+  [/^(\d+) conteo\(s\) agregados( · (\d+) condición\(es\) nueva\(s\))?$/, (m, a, b, c) => `${a} count(s) added${b ? ` · ${c} new condition(s)` : ''}`],
+  [/^(\d+) etiqueta\(s\) en (\d+) grupo\(s\)$/, (m, a, b) => `${a} tag(s) in ${b} group(s)`],
+  [/^(\d+) nuevas$/, (m, a) => `${a} new`],
+  [/^(\d+) condición\(es\) agregadas$/, (m, a) => `${a} condition(s) added`],
+  [/^No se pudo buscar el símbolo: (.*)$/, (m, a) => 'Could not search for the symbol: ' + a],
+  [/^Altura de muro \((.*)\)$/, (m, a) => `Wall height (${a})`],
+  [/^Espesor \((.*)\)$/, (m, a) => `Thickness (${a})`]
+);
 
 /* ---------- Init ---------- */
 S.conditions = presetConditions(); S.activeCond = S.conditions[0].id; S.est = defaultEst();

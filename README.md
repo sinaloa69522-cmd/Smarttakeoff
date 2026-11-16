@@ -56,6 +56,14 @@ La interfaz está **en inglés** por defecto; cambia a español con el selector 
 - **Abrir proyecto** o arrastrar un `.takeoff` a la ventana lo abre con sus planos. En la versión de escritorio, doble clic en el archivo.
 - El autoguardado directo funciona en Chrome y Edge. En Safari o Firefox, Guardar descarga el `.takeoff` y tú lo mueves a la carpeta.
 
+## Todos los oficios y detección automática
+
+- **Biblioteca de oficios**: el proyecto trae condiciones para HVAC, plomería, protección contra incendios, eléctrico, bajo voltaje/alarma, muros y drywall, acabados, puertas y ventanas, techos, concreto y estructura, y obra civil. Cada una con ensamble y mano de obra de referencia. En proyectos anteriores usa **Biblioteca** para agregarlas.
+- **Oficio por hoja**: la app lee el número de hoja (M-, P-, FP-, E-, T-, A-, S-, C-…) o el título y marca la disciplina. La lista de condiciones se filtra sola según la hoja (selector "Auto"); puedes ver todos los oficios o uno en particular. Doble clic en una hoja para corregir su disciplina.
+- **Detectar**: busca en el texto del plano etiquetas como VAV-1, RTU-2, WC-1, LAV-1, FDC y las convierte en conteos de la condición que corresponde. Ignora las columnas de las tablas de equipos. Cada condición de conteo tiene sus "Etiquetas en plano" editables.
+- **Buscar símbolo** (B): encierra un símbolo con un recuadro y la app encuentra todos los iguales en la hoja o en todas las hojas, incluso girados. Quita con un clic los que no apliquen y agrégalos como conteo. Funciona también en planos sin texto.
+- **Muros y concreto**: las condiciones lineales aceptan altura de muro (largo × altura = área de muro) y las de área o lineales un espesor para sacar el volumen en yd³. Nuevos ensambles "por área de muro", "por volumen" y "por perímetro del área".
+
 ## Condiciones
 Cada condición define sistema, material, tamaño, forma de ducto (ancho×alto o diámetro), largo de pieza, separación de soportes, % de desperdicio y precio unitario.
 Puedes editar la hoja *Condiciones* del Excel exportado y volver a cargarla con **Importar**.
